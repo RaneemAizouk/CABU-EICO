@@ -256,3 +256,5 @@ ggplot(d_pos, aes(x = sorted_clusters, y = f_pos_cor, fill = village)) +
        x = "Village",
        y = "% positive")
 
+
+# Save plot

@@ -83,18 +83,20 @@ names(car_r0)
 # CLEAN HOUSEHOLD DATA
 #################################################################
 # Good to note is that the household data is collected at household head level
-# i.e. there is one survey taken by the household head. Now there are multiple 
-# observations within a household, as each line represents a healthcare visit
-# i.e. household heads were asked to list all the household visits of all the 
-# household members of the last 30 days. These are thus represented by each of the lines
-# The 
+# i.e. there is one survey taken by the household head. 
+
+# Then there is a healthcare utilisation survey attached to the household survey
+# Here for each household member, the household head is asked about the number of 
+# healthcare visits in the last 30 days
+# Each of these visits (per provider type) are one line of data
+# Therefore there are multiple observations within a household
+
 
 #################################################################
 # LINK LAB AND HOUSEHOLD DATA
 #################################################################
 
-
-# Create household variable to link to WASH survey by adding zero's.
+# Create household variable in lab data (car_r0) to link to WASH survey by adding zero's.
 df = data.frame(household = car_r0$household) 
 df = df %>%  separate(household, 
                       into = c("text", "num"), 
@@ -161,7 +163,7 @@ length(unique(car_r0$household[car_r0$found_in_wash==0])) # 17 households can no
 unique(car_r0$menage_id[car_r0$found_in_wash==0])
 unique(car_r0$household[car_r0$found_in_wash==0])
 
-# Need to still correct those
+# Need to still correct those, not all household ids are yet corrected to make linkage for all members possible
 
 
 
@@ -219,7 +221,7 @@ df_r0$household[which(df_r0$found_in_wash==0)]
 ###########################################################
 
 # Per household, how many positive
-d = df_r0 %>% group_by(village, household, esbl_pos) %>%
+d = df_r0 %>% group_by(village, intervention_text, household, esbl_pos) %>%
   summarise(n = n())
 
 hh_size = as.data.frame(cbind(df_r0$household,df_r0$nmbre_personne_menage))
@@ -245,9 +247,12 @@ summary(d_pos$f_pos_cor)
 
 sorted_clusters <- with(d_pos, reorder(village, f_pos_cor, FUN = median))
 
+# Plot boxplot of fraction positive per village per intervention group
 ggplot(d_pos, aes(x = sorted_clusters, y = f_pos_cor, fill = village)) +
   geom_jitter(alpha=0.5) + 
   geom_boxplot() + 
+  facet_wrap(~intervention_text, scales=("free_x")) + 
   labs(title = "Boxplot of % positive per village clusters",
        x = "Village",
        y = "% positive")
+

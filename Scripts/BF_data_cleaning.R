@@ -224,18 +224,23 @@ df_r0$household[which(df_r0$found_in_wash==0)]
 d = df_r0 %>% group_by(village, intervention_text, household, esbl_pos) %>%
   summarise(n = n())
 
+samples_per_hh = df_r0 %>% group_by(household) %>%
+  summarise(n_samples = n())
+  
 hh_size = as.data.frame(cbind(df_r0$household,df_r0$nmbre_personne_menage))
 names(hh_size) = c("household","hh_size")
 hh_size = hh_size[!duplicated(hh_size),]
 
 d = left_join(d, hh_size, by="household") %>%
+  left_join(., samples_per_hh) %>% 
   mutate(hh_size = as.numeric(hh_size),
-         n = as.numeric(n),
          hh_size_cor = ifelse(hh_size >5, 5, hh_size),
+         n = as.numeric(n),
+         n_samples = as.numeric(n_samples),
          f_pos = round(n/hh_size,2),
-         f_pos_cor = n/hh_size_cor
-         )
-
+         f_pos_samples_taken = round(n/n_samples,2), # Number of positives over total samples taken
+         f_pos_cor = round(n/hh_size_cor,2) # Assuming not all sample individuals are in the R0 database, but max of 5 individuals sampled per household
+        )
 d_pos = d %>% filter(esbl_pos==1)
 
 # For the larger households, not all are tested. At one point we stopped at max 5 per household
@@ -245,10 +250,10 @@ hist(as.numeric(d_pos$hh_size))
 summary(d_pos$f_pos)
 summary(d_pos$f_pos_cor)
 
-sorted_clusters <- with(d_pos, reorder(village, f_pos_cor, FUN = median))
+sorted_clusters <- with(d_pos, reorder(village, f_pos, FUN = median))
 
 # Plot boxplot of fraction positive per village per intervention group
-ggplot(d_pos, aes(x = sorted_clusters, y = f_pos_cor, fill = village)) +
+ggplot(d_pos, aes(x = sorted_clusters, y = f_pos, fill = village)) +
   geom_jitter(alpha=0.5) + 
   geom_boxplot() + 
   facet_wrap(~intervention_text, scales=("free_x")) + 
@@ -256,5 +261,31 @@ ggplot(d_pos, aes(x = sorted_clusters, y = f_pos_cor, fill = village)) +
        x = "Village",
        y = "% positive")
 
+d_sum = d %>% group_by(village,intervention_text) %>%
+  summarise(mean = mean(f_pos, na.rm=T),
+            median = median(f_pos,na.rm=T),
+            q1 = quantile(f_pos,probs=c(0.25), na.rm = T),
+            q3 = quantile(f_pos, probs=c(0.75), na.rm = T))
+d_sum
+
+# Plot of median fraction positive per village per intervention group
+ggplot(d_sum, aes(x = village, y = median, col = village)) +
+  geom_point(size=2) + 
+  geom_errorbar(aes(ymin=q1,ymax=q3,width=0.5)) +
+  facet_wrap(~intervention_text, scales=("free_x")) + 
+  labs(title = "Boxplot of % positive per village clusters",
+       x = "Village",
+       y = "% positive (median, IQR)")
+
+# Intervention vs controle groups 
+d %>% group_by(intervention_text) %>%
+  summarise(mean = mean(f_pos, na.rm=T),
+            median = median(f_pos,na.rm=T),
+            q1 = quantile(f_pos,probs=c(0.25), na.rm = T),
+            q3 = quantile(f_pos, probs=c(0.75), na.rm = T)) # seems rather similar (luckily)
+
+# Plot density intervention vs control
+ggplot(d, aes(x=f_pos, group=intervention_text, fill=intervention_text)) + 
+  geom_density()
 
 # Save plot

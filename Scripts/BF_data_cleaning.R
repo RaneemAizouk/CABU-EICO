@@ -278,14 +278,29 @@ ggplot(d_sum, aes(x = village, y = median, col = village)) +
        y = "% positive (median, IQR)")
 
 # Intervention vs controle groups 
-d %>% group_by(intervention_text) %>%
+d_pos %>% group_by(intervention_text) %>%
   summarise(mean = mean(f_pos, na.rm=T),
             median = median(f_pos,na.rm=T),
             q1 = quantile(f_pos,probs=c(0.25), na.rm = T),
             q3 = quantile(f_pos, probs=c(0.75), na.rm = T)) # seems rather similar (luckily)
 
 # Plot density intervention vs control
-ggplot(d, aes(x=f_pos, group=intervention_text, fill=intervention_text)) + 
-  geom_density()
+ggplot(d_pos, aes(x=f_pos, group=intervention_text, fill=intervention_text)) + 
+  geom_density(aes(f_pos, ..scaled..)) 
 
-# Save plot
+ggplot(d_pos, aes(x=f_pos, group=village, fill=village)) + 
+  geom_histogram() + facet_wrap(.~ village) +
+  labs(x="%positive within hh", y="number of households")
+
+mean <- d_pos %>% group_by(village) %>%
+  summarise(mean = mean(f_pos, na.rm=T),)
+
+ggplot(d_pos, aes(x=f_pos, group=village, fill = village)) + 
+  geom_density(aes(f_pos, ..scaled..))+
+  labs(x="%positive within hh", y="Density")
+
+ggplot(d_pos, aes(x=f_pos, group=village, fill=village)) + 
+  geom_density(aes(f_pos, ..scaled..))+ 
+  facet_wrap(.~village)+ geom_vline(data=mean, aes(xintercept=mean))+
+  labs(x="%positive within hh", y="Density")
+  # Save plot

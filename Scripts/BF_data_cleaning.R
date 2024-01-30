@@ -318,5 +318,5 @@ print(dp)
 dev.off()
 
 pdf(file="./Output/Figures/density_prevalence_per_intervention.pdf", width=5, height=5)
-print(dp)
+print(dpi)
 dev.off()

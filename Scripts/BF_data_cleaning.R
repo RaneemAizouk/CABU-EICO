@@ -1,5 +1,5 @@
 #####################################################
-# DATA CLEANING AND LINKAGE
+# DATA CLEANING AND LINKAGE BURKINA FASO
 #####################################################
 # This code is cleaning the data and linking the different datasets
 
@@ -253,13 +253,14 @@ summary(d_pos$f_pos_cor)
 sorted_clusters <- with(d_pos, reorder(village, f_pos, FUN = median))
 
 # Plot boxplot of fraction positive per village per intervention group
-ggplot(d_pos, aes(x = sorted_clusters, y = f_pos, fill = village)) +
+bp = ggplot(d_pos, aes(x = sorted_clusters, y = f_pos, fill = village)) +
   geom_jitter(alpha=0.5) + 
   geom_boxplot() + 
   facet_wrap(~intervention_text, scales=("free_x")) + 
   labs(title = "Boxplot of % positive per village clusters",
        x = "Village",
        y = "% positive")
+print(bp)
 
 d_sum = d %>% group_by(village,intervention_text) %>%
   summarise(mean = mean(f_pos, na.rm=T),
@@ -285,12 +286,14 @@ d_pos %>% group_by(intervention_text) %>%
             q3 = quantile(f_pos, probs=c(0.75), na.rm = T)) # seems rather similar (luckily)
 
 # Plot density intervention vs control
-ggplot(d_pos, aes(x=f_pos, group=intervention_text, fill=intervention_text)) + 
+dpi = ggplot(d_pos, aes(x=f_pos, group=intervention_text, fill=intervention_text)) + 
   geom_density(aes(f_pos, ..scaled..)) 
+dpi 
 
 ggplot(d_pos, aes(x=f_pos, group=village, fill=village)) + 
   geom_histogram() + facet_wrap(.~ village) +
   labs(x="%positive within hh", y="number of households")
+
 
 mean <- d_pos %>% group_by(village) %>%
   summarise(mean = mean(f_pos, na.rm=T),)
@@ -299,8 +302,21 @@ ggplot(d_pos, aes(x=f_pos, group=village, fill = village)) +
   geom_density(aes(f_pos, ..scaled..))+
   labs(x="%positive within hh", y="Density")
 
-ggplot(d_pos, aes(x=f_pos, group=village, fill=village)) + 
+dp = ggplot(d_pos, aes(x=f_pos, group=village, fill=village)) + 
   geom_density(aes(f_pos, ..scaled..))+ 
   facet_wrap(.~village)+ geom_vline(data=mean, aes(xintercept=mean))+
   labs(x="%positive within hh", y="Density")
-  # Save plot
+dp
+
+# Save plot
+pdf(file="./Output/Figures/prevalence_per_village.pdf", width=7, height=5)
+print(bp)
+dev.off()
+
+pdf(file="./Output/Figures/density_prevalence_per_village.pdf", width=5, height=5)
+print(dp)
+dev.off()
+
+pdf(file="./Output/Figures/density_prevalence_per_intervention.pdf", width=5, height=5)
+print(dp)
+dev.off()

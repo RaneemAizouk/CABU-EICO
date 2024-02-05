@@ -375,7 +375,7 @@ check = unique(car_r0$menage_id[car_r0$found_in_wash==0])
 dat_extract_ids = left_join(dat_extract_ids, hh_lab_ids, by="household")
 # Check if all linked
 table(dat_extract_ids$bras, useNA= "always")
-table(dat_extract_ids$menage_id)
+sort(table(dat_extract_ids$menage_id))
 
 dat_extract = left_join(dat_extract, hh_lab_ids, by="household")
 # Check if all linked
@@ -393,6 +393,10 @@ r2_ids = unique(car_r2$menage_id)
 table(r1_ids%in% r0_ids) # 2 households can not be found back
 table(r2_ids%in% r0_ids) # 2 households can not be found back
 # Have to wait if household members can also be found back
+
+# Table hh size
+ch = wash_r0[wash_r0$menage_id%in%c(r0_ids),]
+table(ch$nmbre_personne_menage)
 
 # Save data
 file <- paste0(DirectoryDataOut, "/bf_ecoli_esbl.xlsx")

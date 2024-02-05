@@ -227,7 +227,7 @@ wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_t
                                  q21_animal_malade___2,q21_animal_malade___3,           
                                  q21_animal_malade___4,q21_animal_malade___5,           
                                 q21_animal_malade___6,eau_assainissement_hygine_comple) %>%
-  filter(!is.na(date_enquete))
+  filter(filter(!is.na(num_echantillon)))
 
 # Link lab data with household data
 # Perform linkage

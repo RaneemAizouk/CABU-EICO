@@ -18,8 +18,9 @@ DirectoryDataOut <- "./Data/BF/clean"
 # Lab data
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_manualchange_no_password.xlsx"))
 car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_nopassword.xlsx"))
-car_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=1)
-car_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=2)
+car_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=1)
+car_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=2)
+
 
 # Lab ids vs household ids
 hh_lab_ids =  read_xlsx(paste0(DirectoryData,"/Correspondande-Code_Lab-ID_Menage.xlsx"))
@@ -29,6 +30,8 @@ names(hh_lab_ids) = c("household", "menage_id", "bras")
 
 # Household data
 wash_r0 = read_xls(paste0(DirectoryData, "/WP4_WASH_07_09_2023_nopassword.xls"))
+wash_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=1) # These wash_r1 and wash_r2 are not householdsurvey data; but do provide denominator data for lab R1 and R2
+wash_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=2)
 
 # Villages (that are the clusters) of CABU-EICO
 villages = read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
@@ -193,7 +196,7 @@ unique(car_r0$household[car_r0$found_in_wash==0])
 # Select variables - make database with variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
 # are not 1 observation per household
 wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_text, 
-                                 redcap_event_name, 
+                                 redcap_event_name,num_echantillon, 
                                  date_enquete,groupe,nmbre_personne_menage, nbre_enf_0_5ans,
                                  nbre_menage_conc,
                                  informations_gnrales_complete, q1_diarrhee_prevenu___1,         
@@ -227,12 +230,14 @@ wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_t
                                  q21_animal_malade___2,q21_animal_malade___3,           
                                  q21_animal_malade___4,q21_animal_malade___5,           
                                 q21_animal_malade___6,eau_assainissement_hygine_comple) %>%
-  filter(filter(!is.na(num_echantillon)))
+  filter(!is.na(num_echantillon)) # Denominator data (i.e. people tested for esbl) for R0
+
+wash_r0_lab = wash_r0 %>% filter(!is.na(date_enquete)) # ensure just 1 observation per person of whom individual is esbl positive
 
 # Link lab data with household data
 # Perform linkage
 df_r0 = car_r0%>%
-  left_join(wash_r0_sel, by="menage_id", suffix=c("",".y"))%>%
+  left_join(wash_r0_lab, by="menage_id", suffix=c("",".y"))%>%
               select(-ends_with(".y"))
 
 unique(df_r0$household[df_r0$found_in_wash==0]) # 3 households to still link

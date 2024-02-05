@@ -8,6 +8,8 @@
 
 # 1 September 2023
 # Last update: 2 November 2023
+# Update on 5 February: realised that "ajoute" parameter in the bf_villages_cabu.xlsx was used for intervention_yn;
+# incorrectly. Does not matter for sample selection as for all clusters, 2 or 3 households are selected for sequencing
 
 rm(list=ls())
 
@@ -20,6 +22,8 @@ DirectoryDataOut <- "./Data/BF/clean"
 
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_manualchange_no_password.xlsx"))
 car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_nopassword.xlsx"))
+car_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=1)
+car_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=2)
 
 
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-09-20_1301_manual_change_id_nopassword.xlsx"))
@@ -27,7 +31,10 @@ car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_n
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-05-04_manual_change_id_nopassword.xlsx"))
 #car_r0 = read_xlsx(paste0(DirectoryData,"/bf_esbl_r0.xlsx"), sheet=2)
 hh_lab_ids =  read_xlsx(paste0(DirectoryData,"/Correspondande-Code_Lab-ID_Menage.xlsx"))
-  
+names(hh_lab_ids)
+names(car_r0)
+names(hh_lab_ids) = c("household", "menage_id", "bras")
+
 wash_r0 = read_xls(paste0(DirectoryData, "/WP4_WASH_07_09_2023_nopassword.xls"))
 wash_r0_stool = wash_r0 %>% filter(!is.na(num_echantillon))
 
@@ -36,7 +43,11 @@ wash_r0_stool_sel = wash_r0_stool %>% select(menage_id,num_echantillon, date_enq
                                              cs_id_individu, dob_age,dob, age, sexe)
 
 villages = read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
-names(villages) = c("village", "village_name","intervention_text","intervention_yn")
+names(villages) = c("village", "village_name","intervention_text","ajoute")
+
+# Villages where no provider was present; thus no provider intervention
+no_prov = c("zimidin", "GOULOURE", "MOGODIN")
+villages$provider_present = ifelse(villages$village_name%in%no_prov, "no", "yes")
 
 # Errors in ID (see email Daniel, Daniel is correcting those with Frank)
 
@@ -116,6 +127,7 @@ summarise(length(unique(menage_id))))
 
 
 hh_total = merge(hh_at_least_one_esbl, hh_per_cluster)
+
 names(hh_total) = c("village", "hh_num_sampled", "hh_num_cluster")
 
 # Number of households that did not have an ESBL
@@ -204,18 +216,19 @@ vill = d %>%
   group_by(village) %>%
   summarise(n = n()) %>%
   mutate(freq = n / sum(n))
+
 hist(vill$n)
 summary(vill$n)
 vill$n/(12*5) # rough estimate of fraction ESBL positive
 hist(vill$n/(12*5))
 
 d %>%
-  group_by(intervention_yn) %>%
+  group_by(intervention_text) %>%
   summarise(n = n()) %>%
   mutate(freq = n / sum(n))
 
 d %>%
-  group_by(germe_c, intervention_yn) %>%
+  group_by(germe_c, intervention_text) %>%
   summarise(n = n()) %>%
   mutate(freq = n / sum(n))
 
@@ -235,13 +248,14 @@ table(car_r0$morphotyp,car_r0$esbl_pos, useNA='always')
 #####################################################################
 # Selection of households
 #####################################################################
-# So 683 unique individuals with an E. coli ESBL over an assumed 1209 sampled indvidiuals = 56%
+
+# So 671 unique individuals with an E. coli ESBL over 2010 sampled indvidiuals = 56%
 # 1209 is based on earlier presentation of Brecht, needs to be verified (C:\Users\evankleef\OneDrive - ITG\Documenten\GitHub\ITG\Other_projects\AMR\JPI-AMR\Data\BF\CABU_carriageresults.pptx)
 
 # For BF 750 can be sequenced in total
-# 1.	First round ESBL E. coli positive = 55.5% (n=671/1209)
-# 2.	First round ESBL E. coli with 2 morphotypes = 7.9% (n= 96/1209)
-# 3.	First round ESBL E. coli (1 + 2 morphotypes) = 63.4% (n=(96+671)/1209)
+# 1.	First round ESBL E. coli positive = 55.5% (n=671/1210)
+# 2.	First round ESBL E. coli with 2 morphotypes = 7.9% (n= 96/1210)
+# 3.	First round ESBL E. coli (1 + 2 morphotypes) = 63.4% (n=(96+671)/1210)
 # 4.	Max number of complete households that can be sampled per round if 1 isolate per individual 
 # -	750/4 = 187 per round
 # -	187/(5 members per hh*0.565) = 66 
@@ -266,9 +280,14 @@ seed = 120
 set.seed(seed)
 
 # First randomly select clusters with 3 vs 2 villages to include 
-dat_three_hh_i = sample(unique(dat$village[dat$intervention_yn=="Oui"]), 7)
+#dat_three_hh_i = sample(unique(dat$village[dat$intervention_yn=="Oui"]), 7)
+dat_three_hh_i = sample(unique(dat$village[dat$ajoute=="Oui"]), 7) # Used the wrong variable here
+# But does not matter as for all villages, 2 or 3 households are included
+
 set.seed(seed)
-dat_three_hh_ni = sample(unique(dat$village[dat$intervention_yn=="Non"]), 7)
+#dat_three_hh_ni = sample(unique(dat$village[dat$intervention_yn=="Non"]), 7)
+dat_three_hh_ni = sample(unique(dat$village[dat$ajoute=="Non"]), 7)
+
 dat_three_hh = c(dat_three_hh_i,dat_three_hh_ni)
 dat$three_hh = ifelse(dat$village %in%dat_three_hh, 1, 0)
 table(dat$village,dat$three_hh)
@@ -301,6 +320,21 @@ dat$dna_extraction = ifelse(dat$household %in%final_hh_include, 1, 0)
 table(dat$dna_extraction)
 table(dat$germe_c,dat$dna_extraction)
 
+# see how many with intervention how many without
+table(dat$intervention_text, dat$dna_extraction) # This seems pretty balanced?
+
+ch_dna = dat %>% group_by(intervention_text, dna_extraction)%>%
+  summarise(n=n())
+ch_dna
+
+dat %>% filter(dna_extraction == 1) %>%
+  group_by(intervention_text)%>%
+  summarise(n=length(unique(household))) # So 30 households in controle groups; 28 in intervention groups
+
+check = dat %>% filter(dna_extraction == 1) %>%
+  group_by(intervention_text, village)%>%
+  summarise(n=length(unique(household)))
+
 # Add variable to original data
 car_r0$dna_extraction = ifelse(car_r0$household %in%final_hh_include & car_r0$esbl_pos==1 & car_r0$germe_c %in% c("e.coli", "e.coli_2"), 1, 0)
 table(car_r0$dna_extraction)
@@ -329,6 +363,36 @@ hist(table(dat$household), breaks=unique(table(dat$household)), main="All househ
 # Check if any selected with no WASH link
 check = unique(car_r0$menage_id[car_r0$found_in_wash==0])
 
+######################################################################
+# UPDATE # Update 5 February 2024: 
+# Can use Correspondande-Code_Lab-ID_Menage.xlsx to link wash survey now
+# Does not matter for DNA extractions as was merely used to check
+# if IDs could be identified back 
+# Will add household 2 id here, so not to confuse
+######################################################################
+
+# Link ids of dna extracts with hh survey ids
+dat_extract_ids = left_join(dat_extract_ids, hh_lab_ids, by="household")
+# Check if all linked
+table(dat_extract_ids$bras, useNA= "always")
+table(dat_extract_ids$menage_id)
+
+dat_extract = left_join(dat_extract, hh_lab_ids, by="household")
+# Check if all linked
+table(dat_extract$bras, useNA= "always")
+dat_extract = dat_extract %>%
+  rename(menage_id_selfmade = menage_id.x,
+         menage_id = menage_id.y)
+
+# check if ids can be identified in R1 and R2
+# Unique ids R1 
+r0_ids = unique(dat_extract$menage_id)
+r1_ids = unique(car_r1$menage_id)
+r2_ids = unique(car_r2$menage_id)
+
+table(r1_ids%in% r0_ids) # 2 households can not be found back
+table(r2_ids%in% r0_ids) # 2 households can not be found back
+# Have to wait if household members can also be found back
 
 # Save data
 file <- paste0(DirectoryDataOut, "/bf_ecoli_esbl.xlsx")

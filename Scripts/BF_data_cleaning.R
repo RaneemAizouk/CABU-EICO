@@ -351,3 +351,10 @@ dev.off()
 pdf(file="./Output/Figures/density_prevalence_per_intervention.pdf", width=5, height=4)
 print(dpi)
 dev.off()
+
+# Export linked data
+write.csv(df_r0,paste0(DirectoryDataOut,"/bf_r0_lab_hh_linked.csv")) 
+
+# missing links
+r0_notlink = car_r0[car_r0$found_in_wash==0,] %>% select(menage_id,household,village)
+write.csv(df_r0,paste0(DirectoryDataOut,"/need_checking/r0_lab_no_link.csv")) 

@@ -40,13 +40,13 @@ names(villages) = c("village", "village_name","intervention_text","ajouter")
 
 # Check variables between r0 and r1 and r2 - seems we have received the household variables
 # of those with a lab sample, not the lab data
-which(names(car_r1) %in% names(car_r0))
-which(names(car_r1) %in% names(wash_r0))
-length(which(names(car_r1) %in% names(wash_r0)))
-which(!names(car_r1) %in% names(wash_r0))
-names(car_r1[which(names(car_r1) %in% names(car_r0))])
-names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
-names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
+# which(names(car_r1) %in% names(car_r0))
+# which(names(car_r1) %in% names(wash_r0))
+# length(which(names(car_r1) %in% names(wash_r0)))
+# which(!names(car_r1) %in% names(wash_r0))
+# names(car_r1[which(names(car_r1) %in% names(car_r0))])
+# names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
+# names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
 
 # Add variables village and household
 car_r0$village = substr(car_r0$record_id, start = 1, stop = 2)
@@ -97,6 +97,21 @@ names(car_r0)
 # healthcare visits in the last 30 days
 # Each of these visits (per provider type) are one line of data
 # Therefore there are multiple observations within a household
+wash_r0 = wash_r0 %>% mutate(
+  dob = as.Date(dob, format = "%Y-%m-%d"),
+  age = tolower(age),
+  date_consentement = as.Date(date_consentement, format="%Y-%m-%d"),
+  date_recuperation_selle = as.Date(date_recuperation_selle, format="%Y-%m-%d")
+ # ageyears = gsub(" ", "", age), # remove spaces
+#  ageyears = as.numeric(gsub("ans", "", age, fixed = TRUE))
+) %>% select(-dob)
+
+#wash_r0$ageyears[grepl("mois", wash_r0$age)==T] <- as.numeric(gsub("mois", "", wash_r0$age[grepl("mois", wash_r0$age)==T], fixed = TRUE))
+#wash_r0$ageyears[grepl("mois", wash_r0$age)] <- wash_r0$ageyears[grepl("mois", wash_r0$age)] / 12
+#wash_r0$ageyears[is.na(wash_r0$age) & !is.na(wash_r0$dob)] <- round((as.Date("2023-01-30") - wash_r0$dob[is.na(wash_r0$age) & !is.na(wash_r0$dob)])/365.25, 0)
+  
+
+  
 
 
 #################################################################
@@ -104,8 +119,9 @@ names(car_r0)
 #################################################################
 
 # Create household variable in lab data (car_r0) to link to WASH survey by adding zero's.
-
-# Don't need this anymore with the Correspondande-Code_Lab-ID_Menage.xlsx file
+###################################################################################
+# Don't need the below section as we have now the Correspondande-Code_Lab-ID_Menage.xlsx file
+###################################################################################
 # df = data.frame(household = car_r0$household) 
 # df = df %>%  separate(household,
 #                       into = c("text", "num"),
@@ -141,30 +157,6 @@ names(car_r0)
 
 #car_r0$menage_id = df$menage_id
 
-wash_r0$village = substr(wash_r0$menage_id, start = 1, stop = 2)
-wash_r0 = merge(wash_r0, villages, by="village")
-
-# Link lab data with lab vs hh survey ids
-car_r0 = left_join(car_r0, hh_lab_ids, by="household")
-# Check if all linked
-table(car_r0$bras, useNA= "always")
-
-# Link lab data with hh survey ids
-length(unique(car_r0$menage_id))
-length(unique(wash_r0$menage_id))
-
-car_r0$found_in_wash[which(car_r0$menage_id %in% wash_r0$menage_id)] = 1
-car_r0$found_in_wash[is.na(car_r0$found_in_wash)] = 0
-length(unique(car_r0$household[car_r0$found_in_wash==0])) # 3 households can not be found in WASH survey database; 
-unique(car_r0$menage_id[car_r0$found_in_wash==0])
-unique(car_r0$household[car_r0$found_in_wash==0])
-
-# HH ids "ETE00000201" "SBA00001601" "SJG00002501" not found in hh survey
-# "ETE00201" "SDC04101" "SJG02501" --> 
-# In WASH survey "ETE00101" can be found, typo?
-# In hh_labs_ids, SDC04101 corresponds to SBA00001601, should be SDC00004101?
-# In WASH survey "SJG02401" can be found, typo?
-
 # Need to adjust the 28 IDs in the household dataset that have 0's lacking
 # ids_m = as.table(cbind(unique(car_r0$household[car_r0$found_in_wash==0]),
 #              unique(car_r0$menage_id[car_r0$found_in_wash==0])))
@@ -187,14 +179,83 @@ unique(car_r0$household[car_r0$found_in_wash==0])
 # length(unique(car_r0$household[car_r0$found_in_wash==0])) # 17 households can not be found in WASH survey database; could be due to error's in ID or due to zero's that need to be removed, needs checking
 # unique(car_r0$menage_id[car_r0$found_in_wash==0])
 # unique(car_r0$household[car_r0$found_in_wash==0])
+###################################################################################
+# Code can be disgarded up till here
+###################################################################################
 
-# Need to still correct those, not all household ids are yet corrected to make linkage for all members possible
+# Round 0 (pre-intervention round)
+###################################################################################
+# Link village and cluster data to household survey
+wash_r0$village = substr(wash_r0$menage_id, start = 1, stop = 2)
+wash_r0 = merge(wash_r0, villages, by="village")
+
+
+# Link lab data with lab vs hh survey ids (as IDs are in different format)
+car_r0 = left_join(car_r0, hh_lab_ids, by="household")
+# Check if all linked
+table(car_r0$bras, useNA= "always")
+
+# Link lab data with hh survey ids
+length(unique(car_r0$menage_id))
+length(unique(wash_r0$menage_id))
+
+# Can all IDs be traced back from lab to wash survey?
+car_r0$found_in_wash[which(car_r0$menage_id %in% wash_r0$menage_id)] = 1
+car_r0$found_in_wash[is.na(car_r0$found_in_wash)] = 0
+length(unique(car_r0$household[car_r0$found_in_wash==0])) # 3 households can not be found in WASH survey database; 
+unique(car_r0$menage_id[car_r0$found_in_wash==0])
+unique(car_r0$household[car_r0$found_in_wash==0])
+
+# HH ids "ETE00000201" "SBA00001601" "SJG00002501" not found in hh survey
+# "ETE00201" "SDC04101" "SJG02501" --> 
+# In WASH survey "ETE00101" can be found, typo?
+# In hh_labs_ids, SDC04101 corresponds to SBA00001601, should be SDC00004101?
+# In WASH survey "SJG02401" can be found, typo?
+
+
+# Make dataset with only those household individuals that had a stool sample taken and their individual variables
+wash_r0_lab = wash_r0 %>% filter(!is.na(num_echantillon)) %>% # ensure just 1 observation per person of whom individual is esbl positive
+  select(cs_id_individu, menage_id, village, age, sexe, date_consentement, date_recuperation_selle)
+
+
+# Merge wash_r0 patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
+which(car_r0$record_id %in% unique(wash_r0_lab$cs_id_individu)) # Have to change the format of both to make sure matching can be done
+head(car_r0$record_id ); head(wash_r0_lab$cs_id_individu)
+
+# Wash database does no have "-" and puts and "M" before each household member. Also sometimes 01 and sometimes 1 as method of writing
+
+# Change IDs to the same format(not finalised)
+wash_r0_lab$record_id = NA
+wash_r0_lab$member = NA
+wash_r0_lab$record_id[nchar(wash_r0_lab$cs_id_individu) > 2] =  wash_r0_lab$menage_id[nchar(wash_r0_lab$cs_id_individu) > 2]
+#wash_r0_lab$member[nchar(wash_r0_lab$cs_id_individu) > 2] = substr(wash_r0$cs_id_individu, start = 6, stop = 8)[nchar(wash_r0_lab$cs_id_individu) > 2]
+
+#wash_r0_lab$cs_id_individu[nchar(wash_r0_lab$cs_id_individu) > 10]
+
+# ABOVE NEEDS UPDATING #
+
+# MERGE wash_r0_lab with car_r0
+
+# THIS STILL NEEDS TO BE DONE
 
 
 
-# Select variables - make database with variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
+
+
+
+
+
+
+
+
+
+
+##################################################
+# THIS BELOW IS LINKING wash_r0 with lab data but does not create a dataset with the negative tested individuals
+
+# variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
 # are not 1 observation per household
-wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_text, dob_age,dob, age,                             
+wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_text, age,                             
                                  sexe,   
                                  redcap_event_name,num_echantillon, 
                                  date_enquete,groupe,nmbre_personne_menage, nbre_enf_0_5ans,
@@ -232,7 +293,6 @@ wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_t
                                 q21_animal_malade___6,eau_assainissement_hygine_comple) %>%
   filter(!is.na(num_echantillon)) # Denominator data (i.e. people tested for esbl) for R0
 
-wash_r0_lab = wash_r0 %>% filter(!is.na(date_enquete)) # ensure just 1 observation per person of whom individual is esbl positive
 
 # Link lab data with household data
 # Perform linkage
@@ -243,7 +303,7 @@ df_r0 = car_r0%>%
 unique(df_r0$household[df_r0$found_in_wash==0]) # 3 households to still link
 
 #############################################################
-# CHECK IDs over time
+# CHECK IDs over time to see which individuals can be traced back over time
 #############################################################
 
 # Should check IDs with the denominator data, i.e. WASH_r0_sel as some individuals could be ESBL negative next round
@@ -264,6 +324,18 @@ car_r1$record_id[(which(!car_r1$record_id %in% unique(car_r0$record_id)))]
 
 length(which(car_r2$record_id %in% unique(car_r0$record_id))) # only 460 can be found
 car_r2$record_id[(which(!car_r2$record_id %in% unique(car_r0$record_id)))]
+
+
+
+
+
+
+
+
+
+
+
+
 
 ###########################################################
 # DESCRIPTIVE STATISTICS

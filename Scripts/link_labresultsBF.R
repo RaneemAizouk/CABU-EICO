@@ -78,7 +78,6 @@ car_r0 = car_r0 %>%
 
 # Number of cases positive
 table(car_r0$germe_c, car_r0$esbl_pos)
-
 table(car_r0$esbl_pos) # These are the ESBL positive patients based on cetriax_or_cefota, 769
 table(car_r0$testesbl) # These are the ESBL positive patients based on esbl_pos, 772
 table(car_r0$esbl_pos==1 & car_r0$testesbl==1) # difference of 7 which need resolving
@@ -195,7 +194,8 @@ unique(car_r0$household[car_r0$found_in_wash==0])
 
 # Select variables - make database with variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
 # are not 1 observation per household
-wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_text, 
+wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_text, dob_age,dob, age,                             
+                                 sexe,   
                                  redcap_event_name,num_echantillon, 
                                  date_enquete,groupe,nmbre_personne_menage, nbre_enf_0_5ans,
                                  nbre_menage_conc,
@@ -242,6 +242,28 @@ df_r0 = car_r0%>%
 
 unique(df_r0$household[df_r0$found_in_wash==0]) # 3 households to still link
 
+#############################################################
+# CHECK IDs over time
+#############################################################
+
+# Should check IDs with the denominator data, i.e. WASH_r0_sel as some individuals could be ESBL negative next round
+# Better then to create a lab database with ESBL positive and negative together, i.e. take all IDs from WASH_r0_sel
+# and link with lab database car_r0
+
+# Check which car_r1 and car_r2 are in car_r0
+length(which(car_r0$record_id %in% car_r0$id_ecantillon)) # Record_id and id_ecantillon are the same
+length(which(car_r1$record_id %in% car_r1$id_ecantillon)) # Record_id and id_ecantillon are not the same
+cbind(car_r1$record_id,car_r1$id_ecantillon)[(which(!car_r1$record_id %in% car_r1$id_ecantillon)),] # better to use record_id, has no NAs
+
+length(which(car_r2$record_id %in% car_r2$id_ecantillon)) # Record_id and id_ecantillon are not the same
+cbind(car_r2$record_id,car_r2$id_ecantillon)[(which(!car_r2$record_id %in% car_r2$id_ecantillon)),] # better to use record_id
+
+
+length(which(car_r1$record_id %in% unique(car_r0$num_echantillon))) # only 417 can be found
+car_r1$record_id[(which(!car_r1$record_id %in% unique(car_r0$record_id)))]
+
+length(which(car_r2$record_id %in% unique(car_r0$record_id))) # only 460 can be found
+car_r2$record_id[(which(!car_r2$record_id %in% unique(car_r0$record_id)))]
 
 ###########################################################
 # DESCRIPTIVE STATISTICS

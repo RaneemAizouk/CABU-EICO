@@ -296,9 +296,12 @@ unique(car_r0$household[car_r0$found_in_wash==0])
 # In WASH survey "SJG02401" can be found, typo?
 
 
+wash_r0$data_row = c(1:nrow(wash_r0)) # This variable we can use for identifying back those individuals that had a sample taken
+
 # Make dataset with only those household individuals that had a stool sample taken and their individual variables
 wash_r0_lab = wash_r0 %>% filter(!is.na(cs_id_individu)) %>% # ensure just 1 observation per person of whom individual is esbl positive
-  select(cs_id_individu,num_echantillon, menage_id, village, age, sexe, date_consentement, date_recuperation_selle)
+  select(data_row, cs_id_individu,num_echantillon, menage_id, village, age, sexe, date_consentement, date_recuperation_selle)
+  
 
 
 # Merge wash_r0 patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
@@ -404,61 +407,40 @@ d = humanR0[!humanR0$menage_id_member%in% dups_members,]
 humanR0e = rbind(d_dup,d)
 length(unique(humanR0e$record_id)) # one missing needs checking still
 length(unique(humanR0$record_id)) # all household samples are included
+table(!duplicated(humanR0e$record_id))
 
+# Select relevant variables from lab data
+names(humanR0e)
 
-
+humanR0e_sel = humanR0e %>% select(village,village_name,menage_id, intervention_text, household,menage_id_member,record_id,
+                                   id_ecantillon,germe_c, date,esbl_pos)
 
 # MERGE wash_r0_lab with car_r0
-HR0e = left_join(humanR0e,wash_r0_lab_de, by= c("menage_id_member"),  suffix = c("", ""))
+HR0e = left_join(humanR0e_sel,wash_r0_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
 table(HR0e$esbl_pos)
-names(HR0e)
+table(!duplicated(HR0e$record_id))
+
 
 # MERGE OTHER WAY AROUND FOR DENOMINATOR DATA
-HR0 = left_join(wash_r0_lab_de,humanR0e, by= c("menage_id_member"),  suffix = c("", ""))
+HR0 = left_join(wash_r0_lab_de,humanR0e_sel, by= c("menage_id_member","menage_id","village"),  suffix = c("", ""))
+HR0 = HR0 %>%
+  mutate(esbl_pos = ifelse(is.na(esbl_pos),0,esbl_pos))
+table(HR0$esbl_pos) # We have 25 less indiivduals with an ESBL which need checking
+names(HR0)
 
 # ARE ALL MERGED? 
-no_m = which(!car_r0$menage_id_member %in%!HR0e$menage_id_member) # THESE ONES CAN NOT BE MATCHED AND NEED CHECKING
+no_m = which(!car_r0$menage_id_member %in%HR0$menage_id_member) # THESE ONES CAN NOT BE MATCHED AND NEED CHECKING
 length(no_m)
-car_r0$menage_id_member[no_m] # WE LOSE 25 individuals and need checking
-
-
-# ROUND 1
-#############################################################################
+car_r0$menage_id_member[no_m] # WE LOSE 30 individuals and need checking
 
 
 
-# ROUND 2
-#############################################################################
-
-
-
-
-
-
-
-# Create a dataset for which IDs need checking for data managers
-####################################################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##################################################
-# THIS BELOW IS LINKING wash_r0 with lab data but does not create a dataset with the negative tested individuals
+# Select relevant variables from the household survey
+################################################################################################
 
 # variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
 # are not 1 observation per household
-wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_text, age,                             
+wash_r0_sel = wash_r0 %>% select(data_row,menage_id,village, village_name, intervention_text, age,                             
                                  sexe,   
                                  redcap_event_name,num_echantillon, 
                                  date_enquete,groupe,nmbre_personne_menage, nbre_enf_0_5ans,
@@ -493,17 +475,30 @@ wash_r0_sel = wash_r0 %>% select(menage_id,village, village_name, intervention_t
                                  q20_excrement_animaux,q21_animal_malade___1,           
                                  q21_animal_malade___2,q21_animal_malade___3,           
                                  q21_animal_malade___4,q21_animal_malade___5,           
-                                q21_animal_malade___6,eau_assainissement_hygine_comple) %>%
+                                 q21_animal_malade___6,eau_assainissement_hygine_comple) %>%
   filter(!is.na(num_echantillon)) # Denominator data (i.e. people tested for esbl) for R0
 
 
-# Link lab data with household data
-# Perform linkage
-df_r0 = car_r0%>%
-  left_join(wash_r0_lab, by="menage_id", suffix=c("",".y"))%>%
-              select(-ends_with(".y"))
+# FINAL DATASET FOR ANALYSES WITH ALL HOUSEHOLD VARIABLES
+HR0_final = left_join(HR0,wash_r0_sel)
+table(is.na(HR0_final$menage_id))
 
-unique(df_r0$household[df_r0$found_in_wash==0]) # 3 households to still link
+
+# ROUND 1
+#############################################################################
+
+
+
+# ROUND 2
+#############################################################################
+
+
+
+
+
+# Create a dataset for which IDs need checking for data managers
+####################################################################
+
 
 #############################################################
 # CHECK IDs over time to see which individuals can be traced back over time

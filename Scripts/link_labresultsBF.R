@@ -175,8 +175,27 @@ wash_r0 = wash_r0 %>% mutate(
 # ROUND 1
 ################################
   
+wash_r1 = wash_r1 %>% mutate(
+  dob = as.Date(dob, format = "%Y-%m-%d"),
+  age = tolower(age),
+  date_consentement = as.Date(date_consentement, format="%Y-%m-%d"),
+  date_recuperation_selle = as.Date(date_recuperation_selle, format="%Y-%m-%d")
+  # ageyears = gsub(" ", "", age), # remove spaces
+  #  ageyears = as.numeric(gsub("ans", "", age, fixed = TRUE))
+) %>% select(-dob)
+
+
 # ROUND 2
 ################################
+wash_r2 = wash_r2 %>% mutate(
+  dob = as.Date(dob, format = "%Y-%m-%d"),
+  age = tolower(age),
+  date_consentement = as.Date(date_consentement, format="%Y-%m-%d"),
+  date_recuperation_selle = as.Date(date_recuperation_selle, format="%Y-%m-%d")
+  # ageyears = gsub(" ", "", age), # remove spaces
+  #  ageyears = as.numeric(gsub("ans", "", age, fixed = TRUE))
+) %>% select(-dob)
+
 
 #################################################################
 # LINK LAB AND HOUSEHOLD DATA
@@ -235,7 +254,7 @@ wash_r0 = wash_r0 %>% mutate(
 #   repl =  wash_r0$menage_id[wash_r0$menage_id==i] 
 #   wash_r0$menage_id[wash_r0$menage_id==i] = rep(ids_m[p,2], length(repl))
 #   p = p+1
-# } ffg
+# }
 # 
 # # which left?
 # car_r0$found_in_wash[which(car_r0$menage_id %in% wash_r0$menage_id)] = 1
@@ -279,7 +298,7 @@ unique(car_r0$household[car_r0$found_in_wash==0])
 
 # Make dataset with only those household individuals that had a stool sample taken and their individual variables
 wash_r0_lab = wash_r0 %>% filter(!is.na(cs_id_individu)) %>% # ensure just 1 observation per person of whom individual is esbl positive
-  select(cs_id_individu, menage_id, village, age, sexe, date_consentement, date_recuperation_selle)
+  select(cs_id_individu,num_echantillon, menage_id, village, age, sexe, date_consentement, date_recuperation_selle)
 
 
 # Merge wash_r0 patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
@@ -296,16 +315,117 @@ unique(wash_r0$cs_id_individu)
 # THEN for car_r0 we take also menage_Id and digits after the "-", remove the 0's then two can be combined
 
 # Change IDs to the same format(not finalised)
-wash_r0_lab$record_id = NA
+
+# Create a variable in which we will safe the new formatted and cleaned ID
+wash_r0_lab$menage_id_member = NA
+
+# Create a variable that will just store the household member number
 wash_r0_lab$member = NA
-wash_r0_lab$record_id[nchar(wash_r0_lab$cs_id_individu) > 2] =  wash_r0_lab$menage_id[nchar(wash_r0_lab$cs_id_individu) > 2]
-#wash_r0_lab$member[nchar(wash_r0_lab$cs_id_individu) > 2] = substr(wash_r0$cs_id_individu, start = 6, stop = 8)[nchar(wash_r0_lab$cs_id_individu) > 2]
 
-#wash_r0_lab$cs_id_individu[nchar(wash_r0_lab$cs_id_individu) > 10]
+# Extract the number after M to get household number
+wash_r0_lab$member =  gsub(".*M", "", wash_r0_lab$cs_id_individu)
+# Remove leading '0's
+wash_r0_lab$member = as.character(as.numeric(wash_r0_lab$member))
+# Check the one's which are now NA
+table(is.na(wash_r0_lab$member))
+wash_r0_lab$cs_id_individu[is.na(wash_r0_lab$member)] # 5 individuals have a household member number missing
+wash_r0_lab$num_echantillon[is.na(wash_r0_lab$member)] # of two we can get them from num_echantillon
+wash_r0_lab$member[wash_r0_lab$cs_id_individu=="CRAS1003"] = "1"
+wash_r0_lab$member[wash_r0_lab$cs_id_individu=="SCA00101"] = "3"
+table(is.na(wash_r0_lab$member))
 
-# ABOVE NEEDS UPDATING #
+
+# Now create new variable for linking with lab dataset
+wash_r0_lab$menage_id_member = paste0(wash_r0_lab$menage_id, "-", wash_r0_lab$member)
+wash_r0_lab$menage_id_member
+# Make NAs for the one's that still need checking
+wash_r0_lab$menage_id_member[is.na(wash_r0_lab$member)] = NA
+table(is.na(wash_r0_lab$menage_id_member))
+
+
+# Check if dubplicates from wash_r0
+table(duplicated(wash_r0_lab$menage_id_member)) # 14 duplicates
+dups = unique(wash_r0_lab$menage_id_member[duplicated(wash_r0_lab$menage_id_member)])
+View(wash_r0_lab[which(wash_r0_lab$menage_id_member%in%dups),])
+# For   "SCB00002402-7", "SCB00002402-8"  "SCB00002402-9"  "SCB00002402-10" "SCB00002402-11" "SCB00002402-12"
+# THese are entered double, so keep the ones without NA for age
+nkeep = which(wash_r0_lab$menage_id_member%in%c("SCB00002402-7", "SCB00002402-8",  "SCB00002402-9" ,
+                                                "SCB00002402-10" ,"SCB00002402-11", "SCB00002402-12") & is.na(wash_r0_lab$age)) 
+
+wash_r0_lab_d = wash_r0_lab[-c(nkeep),]
+
+# Then for remainder keep first record for now
+wash_r0_lab_de = wash_r0_lab_d %>% filter(!duplicated(menage_id_member)) # STILL NEED TO DO CHECKING FOR THOSE THAT ARE DUPLICATES BUT KEEP LIKE THIS FOR NOW
+table(duplicated(wash_r0_lab_de$menage_id_member)) # 
+
+
+
+
+# Now create the same variable for the lab dataset
+# Create a variable in which we will safe the new formatted and cleaned ID
+car_r0$menage_id_member = NA
+
+# Create a variable that will just store the household member number
+car_r0$member = NA
+
+# Extract the number after M to get household number
+car_r0$member =  gsub(".*-", "", car_r0$record_id)
+# Remove leading '0's
+car_r0$member = as.character(as.numeric(car_r0$member))
+# Check the one's which are now NA
+table(is.na(car_r0$member))
+car_r0$record_id[is.na(car_r0$member)] # 16 individuals have a household member number after M
+car_r0$member[is.na(car_r0$member)] =  gsub(".*M", "", car_r0$record_id[is.na(car_r0$member)])
+table(is.na(car_r0$member))
+
+# Now create new variable for linking with lab dataset
+car_r0$menage_id_member = paste0(car_r0$menage_id, "-", car_r0$member)
+car_r0$menage_id_member
+
+
+# Remove salmonellas
+humanR0 = car_r0 %>% filter(germe_c != "salmonella")
+
+# Keep for those with two e. coli's only ESBL positive
+# First make dataset with only those with more than one e coli
+dups = humanR0$record_id[duplicated(humanR0$record_id)] # 97
+dups_members=humanR0$menage_id_member[duplicated(humanR0$menage_id_member)] # 98
+
+d = humanR0[humanR0$menage_id_member%in% dups_members,]
+# Keep only ESBL positives
+d_dup = d %>% filter(esbl_pos==1)
+
+length(d_dup$menage_id_member[duplicated(d_dup$menage_id_member)]) # 94 individuals left
+# Keep only one record of those as we only need to know IF they were ESBL positive, not how many strains
+d_dup = d_dup%>%filter(!duplicated(menage_id_member))
+
+# Now merge with those that only had 1 E. coli
+d = humanR0[!humanR0$menage_id_member%in% dups_members,]
+humanR0e = rbind(d_dup,d)
+length(unique(humanR0e$record_id)) # one missing needs checking still
+length(unique(humanR0$record_id)) # all household samples are included
+
+
+
 
 # MERGE wash_r0_lab with car_r0
+HR0e = left_join(humanR0e,wash_r0_lab_de, by= c("menage_id_member"),  suffix = c("", ""))
+table(HR0e$esbl_pos)
+names(HR0e)
+
+# MERGE OTHER WAY AROUND FOR DENOMINATOR DATA
+HR0 = left_join(wash_r0_lab_de,humanR0e, by= c("menage_id_member"),  suffix = c("", ""))
+
+# ARE ALL MERGED? 
+no_m = which(!car_r0$menage_id_member %in%!HR0e$menage_id_member) # THESE ONES CAN NOT BE MATCHED AND NEED CHECKING
+length(no_m)
+car_r0$menage_id_member[no_m] # WE LOSE 25 individuals and need checking
+
+
+
+
+
+
 
 # THIS STILL NEEDS TO BE DONE
 

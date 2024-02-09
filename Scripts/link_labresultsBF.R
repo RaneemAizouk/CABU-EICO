@@ -49,10 +49,24 @@ names(villages) = c("village", "village_name","intervention_text","ajouter")
 # names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
 
 # Add variables village and household
+# ROUND 0
+####################
 car_r0$village = substr(car_r0$record_id, start = 1, stop = 2)
-#car_r0$household = str_extract(car_r0$record_id_manual_change, "[^-]+")
 car_r0$household = str_extract(car_r0$record_id, "[^-]+")
 car_r0 = merge(car_r0, villages, by="village")
+
+# ROUND 1
+####################
+car_r1$village = substr(car_r1$record_id, start = 1, stop = 2)
+car_r1$household = str_extract(car_r1$record_id, "[^-]+")
+car_r1 = merge(car_r1, villages, by="village")
+
+# ROUND 2
+####################
+car_r2$village = substr(car_r2$record_id, start = 1, stop = 2)
+car_r2$household = str_extract(car_r2$record_id, "[^-]+")
+car_r2 = merge(car_r2, villages, by="village")
+
 
 ############################################################
 # CLEAN LAB DATA
@@ -68,6 +82,8 @@ car_r0 = merge(car_r0, villages, by="village")
 # Would be good to do a final check with Yougbare if this is correct or whether
 # we can just use all the observations in the car_r0 file (i.e. esbltest == 0 and esbltest == 1). 
 
+# ROUND 0
+####################
 car_r0 = car_r0 %>%
   mutate(germe_c = ifelse(germe %in% c("E.COLI", "E-COLI", "ECOLI", "E.COLI 2", "E.COLI 1", 
                                        "E-COLI 2","E-CLI","E-CLOI"),"e.coli", 
@@ -80,11 +96,51 @@ car_r0 = car_r0 %>%
 table(car_r0$germe_c, car_r0$esbl_pos)
 table(car_r0$esbl_pos) # These are the ESBL positive patients based on cetriax_or_cefota, 769
 table(car_r0$testesbl) # These are the ESBL positive patients based on esbl_pos, 772
-table(car_r0$esbl_pos==1 & car_r0$testesbl==1) # difference of 7 which need resolving
+table(car_r0$esbl_pos==1 & car_r0$testesbl==1) # difference of 7; we decided to ignore these differences
 
 names(car_r0)
 
+# ROUND 1
+####################
+table(car_r1$germe)
 
+car_r1 = car_r1 %>%
+  mutate(germe_c = ifelse(germe %in% c("E.COLI", "E-COLI", "ECOLI", "E.COLI 2", "E.COLI 1", 
+                                       "E-COLI 2","E-CLI","E-CLOI"),"e.coli", 
+                          ifelse(germe %in% c("SALMONELLA SP","SALMONELLA SPP","SALMONELLA SSP", "SALMO SPP", "SALMONELLE SPP", "SELMO",
+                                              "SALMONELLA", "SALMO"),"salmonella",NA)),
+         germe_c = ifelse(morphotyp%in%c(1, NA),germe_c, paste0(germe_c, "_", 2)),
+         esbl_pos = ifelse(diametr_cetriax_or_cefota <= 22, 1, 0))
+
+# Number of cases positive
+table(car_r1$germe_c, car_r1$germe)
+table(car_r1$germe, car_r1$esbl_pos)
+
+table(car_r1$germe_c, car_r1$esbl_pos)
+table(car_r1$esbl_pos) # These are the ESBL positive patients based on cetriax_or_cefota, 653
+table(car_r1$testesbl) # These are the ESBL positive patients based on esbl_pos, 653
+table(car_r1$esbl_pos==1 & car_r1$testesbl==1) # difference of 2. We decided to ignore these differences
+
+
+# ROUND 2
+####################
+table(car_r2$germe, useNA = "always")
+
+car_r2 = car_r2 %>%
+  mutate(germe_c = ifelse(germe %in% c("E.COLI", "E-COLI", "ECOLI", "E.COLI 2", "E.COLI 1", "E.COLIE",
+                                       "E-COLI 2","E-CLI","E-CLOI"),"e.coli", 
+                          ifelse(germe %in% c("SALMONELLA SP","SALMONELLA SPP","SALMONELLA SSP",
+                                              "SALMONELLA", "SALMO"),"salmonella",NA)),
+         germe_c = ifelse(morphotyp%in%c(1, NA),germe_c, paste0(germe_c, "_", 2)),
+         esbl_pos = ifelse(diametr_cetriax_or_cefota <= 22, 1, 0))
+
+# Number of cases positive
+table(car_r2$germe_c, car_r2$germe)
+
+table(car_r2$germe_c, car_r2$esbl_pos)
+table(car_r2$esbl_pos) # These are the ESBL positive patients based on cetriax_or_cefota, 653
+table(car_r2$testesbl) # These are the ESBL positive patients based on esbl_pos, 653
+table(car_r2$esbl_pos==1 & car_r2$testesbl==1) # difference of 17. We decided to ignore these differences
 
 #################################################################
 # CLEAN HOUSEHOLD DATA
@@ -97,6 +153,9 @@ names(car_r0)
 # healthcare visits in the last 30 days
 # Each of these visits (per provider type) are one line of data
 # Therefore there are multiple observations within a household
+
+# ROUND 0
+################################
 wash_r0 = wash_r0 %>% mutate(
   dob = as.Date(dob, format = "%Y-%m-%d"),
   age = tolower(age),
@@ -110,9 +169,11 @@ wash_r0 = wash_r0 %>% mutate(
 #wash_r0$ageyears[grepl("mois", wash_r0$age)] <- wash_r0$ageyears[grepl("mois", wash_r0$age)] / 12
 #wash_r0$ageyears[is.na(wash_r0$age) & !is.na(wash_r0$dob)] <- round((as.Date("2023-01-30") - wash_r0$dob[is.na(wash_r0$age) & !is.na(wash_r0$dob)])/365.25, 0)
   
-
+# ROUND 1
+################################
   
-
+# ROUND 2
+################################
 
 #################################################################
 # LINK LAB AND HOUSEHOLD DATA
@@ -183,7 +244,7 @@ wash_r0 = wash_r0 %>% mutate(
 # Code can be disgarded up till here
 ###################################################################################
 
-# Round 0 (pre-intervention round)
+# ROUND 0 (pre-intervention round)
 ###################################################################################
 # Link village and cluster data to household survey
 wash_r0$village = substr(wash_r0$menage_id, start = 1, stop = 2)
@@ -221,8 +282,15 @@ wash_r0_lab = wash_r0 %>% filter(!is.na(num_echantillon)) %>% # ensure just 1 ob
 # Merge wash_r0 patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
 which(car_r0$record_id %in% unique(wash_r0_lab$cs_id_individu)) # Have to change the format of both to make sure matching can be done
 head(car_r0$record_id ); head(wash_r0_lab$cs_id_individu)
+unique(car_r0$record_id)
+unique(wash_r0$cs_id_individu)
 
+# SEE HOW TO DO THE LINKAGE
 # Wash database does no have "-" and puts and "M" before each household member. Also sometimes 01 and sometimes 1 as method of writing
+# PROBABLY IF WE TAKE FROM wash_r0 cs_id_individue all "MX" (so M + number after ID), then put that in a seperate column.
+# Then we take the household number from the WASH survey (so menage_id), combine these to with a hyphen
+
+# THEN for car_r0 we take also menage_Id and digits after the "-", remove the 0's then two can be combined
 
 # Change IDs to the same format(not finalised)
 wash_r0_lab$record_id = NA

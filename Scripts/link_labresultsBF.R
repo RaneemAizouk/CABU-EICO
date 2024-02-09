@@ -48,6 +48,9 @@ names(villages) = c("village", "village_name","intervention_text","ajouter")
 # names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
 # names(car_r1[which(!names(car_r1) %in% names(wash_r0))])
 
+# Antibiotic use data
+
+
 # Add variables village and household
 # ROUND 0
 ####################
@@ -275,7 +278,7 @@ unique(car_r0$household[car_r0$found_in_wash==0])
 
 
 # Make dataset with only those household individuals that had a stool sample taken and their individual variables
-wash_r0_lab = wash_r0 %>% filter(!is.na(num_echantillon)) %>% # ensure just 1 observation per person of whom individual is esbl positive
+wash_r0_lab = wash_r0 %>% filter(!is.na(cs_id_individu)) %>% # ensure just 1 observation per person of whom individual is esbl positive
   select(cs_id_individu, menage_id, village, age, sexe, date_consentement, date_recuperation_selle)
 
 

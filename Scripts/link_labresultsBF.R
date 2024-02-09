@@ -235,7 +235,7 @@ wash_r0 = wash_r0 %>% mutate(
 #   repl =  wash_r0$menage_id[wash_r0$menage_id==i] 
 #   wash_r0$menage_id[wash_r0$menage_id==i] = rep(ids_m[p,2], length(repl))
 #   p = p+1
-# }
+# } ffg
 # 
 # # which left?
 # car_r0$found_in_wash[which(car_r0$menage_id %in% wash_r0$menage_id)] = 1

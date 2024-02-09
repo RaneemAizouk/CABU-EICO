@@ -434,7 +434,7 @@ length(no_m)
 car_r0$menage_id_member[no_m] # WE LOSE 30 individuals and need checking
 
 
-
+View(HR0)
 # Select relevant variables from the household survey
 ################################################################################################
 
@@ -486,13 +486,42 @@ table(is.na(HR0_final$menage_id))
 
 # ROUND 1
 #############################################################################
+wash_r1$village = substr(wash_r1$menage_id, start = 1, stop = 2)
+wash_r1 = merge(wash_r1, villages, by="village")
 
+
+# Link lab data with lab vs hh survey ids (as IDs are in different format)
+car_r1 = left_join(car_r1, hh_lab_ids, by="household")
+View(car_r1[is.na(car_r1$menage_id),]) # These are not part of the hh_lab_ids ref check of r0, thus new households with an ESBL Or 
+                                       # For ECCMID, if we want to still submit something, we may want to ignore these IDs for now
+
+
+# Check if all linked
+table(car_r1$bras, useNA= "always") # 5 can not be linked
+
+# Link lab data with hh survey ids
+length(unique(car_r1$menage_id))
+length(unique(wash_r1$menage_id))
 
 
 # ROUND 2
 #############################################################################
 
+wash_r2$village = substr(wash_r2$menage_id, start = 1, stop = 2)
+wash_r2 = merge(wash_r2, villages, by="village")
 
+
+# Link lab data with lab vs hh survey ids (as IDs are in different format)
+car_r2 = left_join(car_r2, hh_lab_ids, by="household")
+View(car_r2[is.na(car_r2$menage_id),]) # These are not part of the hh_lab_ids ref check of r0, thus new households with an ESBL Or 
+                                       # For ECCMID, if we want to still submit something, we may want to ignore these IDs for now
+
+# Check if all linked
+table(car_r2$bras, useNA= "always") # 8 can not be linked
+
+# Link lab data with hh survey ids
+length(unique(car_r2$menage_id))
+length(unique(wash_r2$menage_id))
 
 
 

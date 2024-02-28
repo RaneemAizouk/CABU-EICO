@@ -22,8 +22,8 @@ DirectoryDataOut <- "./Data/BF/clean"
 
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_manualchange_no_password.xlsx"))
 car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_nopassword.xlsx"))
-car_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=1)
-car_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=2)
+car_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=1)
+car_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=2)
 
 
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-09-20_1301_manual_change_id_nopassword.xlsx"))
@@ -52,44 +52,82 @@ villages$provider_present = ifelse(villages$village_name%in%no_prov, "no", "yes"
 # Errors in ID (see email Daniel, Daniel is correcting those with Frank)
 
 # Add variables village and household
+# ROUND 0
+####################
 car_r0$village = substr(car_r0$record_id, start = 1, stop = 2)
 #car_r0$household = str_extract(car_r0$record_id_manual_change, "[^-]+")
 car_r0$household = str_extract(car_r0$record_id, "[^-]+")
 car_r0 = merge(car_r0, villages, by="village")
 
-# Create household variable to link to WP4 survey by adding zero's.
-df = data.frame(household = car_r0$household) 
-df = df %>%  separate(household, 
-           into = c("text", "num"), 
-           sep = "(?<=[A-Za-z])(?=[0-9])")
+# ROUND 1
+####################
+car_r1$village = substr(car_r1$record_id, start = 1, stop = 2)
+car_r1$household = str_extract(car_r1$record_id, "[^-]+")
+car_r1 = merge(car_r1, villages, by="village")
 
-df$num_ad = NULL
-df$household = car_r0$household
+# ROUND 2
+####################
+car_r2$village = substr(car_r2$record_id, start = 1, stop = 2)
+car_r2$household = str_extract(car_r2$record_id, "[^-]+")
+car_r2 = merge(car_r2, villages, by="village")
 
-for(i in 1:length(df$num)){
-  if(nchar(df$num)[i]==3){
-    p = "00000"
-    df$num_ad[i] = paste0(p,df$num[i])
-  }else if(nchar(df$num)[i]==4){
-    p = "0000"
-    df$num_ad[i] = paste0(p,df$num[i])
-  }else if(nchar(df$num)[i]==5){
-    p = "000"
-    df$num_ad[i] = paste0(p,df$num[i])
-  }
-  else if(nchar(df$num)[i]==6){
-    p = "00"
-    df$num_ad[i] = paste0(p,df$num[i])
-  }
-}
 
-#This is not yet doing the trick fully as some menage_id have no zero's (see nchar == 8 for some id's)
-# Also some nchar == 12 for some in the new df$menage_id which should be 11
-df$menage_id = paste0(df$text,df$num_ad)
-nchar(df$menage_id)
-nchar(wash_r0$menage_id)
+# 
+# # Create household variable to link to WP4 survey by adding zero's.
+# df = data.frame(household = car_r0$household) 
+# df = df %>%  separate(household, 
+#            into = c("text", "num"), 
+#            sep = "(?<=[A-Za-z])(?=[0-9])")
+# 
+# df$num_ad = NULL
+# df$household = car_r0$household
+# 
+# for(i in 1:length(df$num)){
+#   if(nchar(df$num)[i]==3){
+#     p = "00000"
+#     df$num_ad[i] = paste0(p,df$num[i])
+#   }else if(nchar(df$num)[i]==4){
+#     p = "0000"
+#     df$num_ad[i] = paste0(p,df$num[i])
+#   }else if(nchar(df$num)[i]==5){
+#     p = "000"
+#     df$num_ad[i] = paste0(p,df$num[i])
+#   }
+#   else if(nchar(df$num)[i]==6){
+#     p = "00"
+#     df$num_ad[i] = paste0(p,df$num[i])
+#   }
+# }
+# 
+# #This is not yet doing the trick fully as some menage_id have no zero's (see nchar == 8 for some id's)
+# # Also some nchar == 12 for some in the new df$menage_id which should be 11
+# df$menage_id = paste0(df$text,df$num_ad)
+# nchar(df$menage_id)
+# nchar(wash_r0$menage_id)
+#car_r0$menage_id = df$menage_id
 
-car_r0$menage_id = df$menage_id
+
+# Link lab data with lab vs hh survey ids (as IDs are in different format)
+# ROUND 0
+####################################################
+car_r0 = left_join(car_r0, hh_lab_ids, by="household")
+
+# Check if all linked
+table(car_r0$bras, useNA= "always")
+
+# ROUND 1
+####################################################
+car_r1 = left_join(car_r1, hh_lab_ids, by="household")
+
+# Check if all linked
+table(car_r1$bras, useNA= "always") # 5 not linked
+
+# ROUND 2
+####################################################
+car_r2 = left_join(car_r2, hh_lab_ids, by="household")
+
+# Check if all linked
+table(car_r2$bras, useNA= "always") # 8 not linked
 
 wash_r0_stool_sel$village = substr(wash_r0_stool_sel$menage_id, start = 1, stop = 2)
 wash_r0_stool_sel = merge(wash_r0_stool_sel, villages, by="village")
@@ -377,22 +415,91 @@ dat_extract_ids = left_join(dat_extract_ids, hh_lab_ids, by="household")
 table(dat_extract_ids$bras, useNA= "always")
 sort(table(dat_extract_ids$menage_id))
 
-dat_extract = left_join(dat_extract, hh_lab_ids, by="household")
-# Check if all linked
-table(dat_extract$bras, useNA= "always")
-dat_extract = dat_extract %>%
-  rename(menage_id_selfmade = menage_id.x,
-         menage_id = menage_id.y)
+# dat_extract = left_join(dat_extract, hh_lab_ids, by="household")
+# # Check if all linked
+# table(dat_extract$bras, useNA= "always")
+# dat_extract = dat_extract %>%
+#   rename(menage_id_selfmade = menage_id.x,
+#          menage_id = menage_id.y)
 
 # check if ids can be identified in R1 and R2
 # Unique ids R1 
-r0_ids = unique(dat_extract$menage_id)
-r1_ids = unique(car_r1$menage_id)
-r2_ids = unique(car_r2$menage_id)
+r0_ids = dat_extract_ids$menage_id
+r1_ids = unique(car_r1$menage_id) # 232
+r2_ids = unique(car_r2$menage_id) # 232
 
-table(r1_ids%in% r0_ids) # 2 households can not be found back
-table(r2_ids%in% r0_ids) # 2 households can not be found back
-# Have to wait if household members can also be found back
+length(unique(car_r0$menage_id)) # 240 so we have a loss to follow up of 8 households
+
+table(r1_ids%in% r0_ids) # 
+unique(dat_extract$menage_id[which(!r0_ids %in% r1_ids)]) # 6 households can not be found back, loss to follow up?
+not_r1 = unique(dat_extract$menage_id[which(!r0_ids %in% r1_ids)]) # 5 households can not be found back, loss to follow up?
+not_r1
+#car_r1$record_id[car_r1$village %in% c("EF", "EA", "EG", "SJ", "SK")] # 5 households can not be found back, loss to follow up?
+
+
+table(r2_ids%in% r0_ids) # 
+unique(dat_extract$menage_id[which(!r0_ids %in% r2_ids)]) # 9 households can not be found back
+unique(dat_extract$household[which(!r0_ids %in% r2_ids)]) # 9 households can not be found back
+
+not_r2 = unique(dat_extract$menage_id[which(!r0_ids %in% r2_ids)]) # 9 households can not be found back
+
+# Check with IDs that need checking if that is the reason
+not_in_dataset0 = read_excel("./Data/BF/clean/need_checking/not_in_dataset0.xlsx")
+not_in_dataset1 = read_excel("./Data/BF/clean/need_checking/not_in_dataset1.xlsx")
+not_in_dataset2 = read_excel("./Data/BF/clean/need_checking/not_in_dataset2.xlsx")
+
+not_r1 # EAA00002201" "EFA00002602" "EFB00000401" "EGB00000201" "SJG00003401" "SKJ00000901"
+not_in_dataset1$record_id # 
+
+not_r2
+not_in_dataset2$record_id # 
+
+# And from the households overall, any in the record_ids that needs checking?
+unique(dat_extract$menage_id[which(r0_ids %in% not_in_dataset1$menage_id)]) # 1 households are part of ids that need checking 
+unique(dat_extract$menage_id[which(r0_ids %in% not_in_dataset2$menage_id)]) # 1 households are part of ids that need checking 
+
+# Of all the IDs that could be linked
+data_eccmid = read_excel("./Data/BF/clean/data_colonisation_eccmid.xlsx")
+dat_complete = data_eccmid[complete.cases(data_eccmid[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")]),] # 892
+dat_extract_ids_all = dat_complete[dat_complete$menage_id %in% dat_extract_ids$menage_id,]
+
+length(unique(dat_extract_ids_all$menage_id)) # so of 55 household we have complete records for the three rounds
+complete_ids = unique(dat_extract_ids_all$menage_id)
+dat_complete$nmbre_personne_menage[dat_complete$menage_id%in%complete_ids]
+
+hh_complete = dat_complete[!duplicated(dat_complete$menage_id),]
+table(hh_complete$nmbre_personne_menage[hh_complete$menage_id%in%complete_ids])
+
+
+length(unique(dat_extract_ids_all$menage_id[dat_extract_ids_all$nmbre_personne_menage <10])) # 37 households with a household size below 8
+length(dat_extract_ids_all$menage_id[dat_extract_ids_all$nmbre_personne_menage <10]) # 131 households with a household size below 8
+
+# Take IDs from those households from which we have complete IDs
+dat_extract_ids_r1 = car_r1[car_r1$menage_id %in% complete_ids,] # 161 samples
+length(unique(dat_extract_ids_r1$menage_id)) # 52 households, so rest was then negative?
+not_r1 = complete_ids[which(!complete_ids %in% unique(car_r1$menage_id))]
+View(dat_complete[dat_complete$menage_id%in%not_r1,]) # All were negative in round 1
+
+# hh sizes
+dat_complete$nmbre_personne_menage[dat_complete$menage_id%in%not_r1]
+
+
+
+dat_extract_ids_dna_r1 = dat_extract_ids_r1 %>% select(household,record_id, id_ecantillon)
+
+
+dat_complete$nmbre_personne_menage[dat_complete$menage_id%in%not_r1]
+dat_complete$nmbre_personne_menage[dat_complete$menage_id%in%not_r2]
+
+
+dat_extract_ids_r2 = car_r2[car_r2$menage_id %in% complete_ids,] # 178 samples
+length(unique(dat_extract_ids_r2$menage_id)) # 48 households
+not_r2 = complete_ids[which(!complete_ids %in% unique(car_r2$menage_id))]
+View(dat_complete[dat_complete$menage_id%in%not_r2,]) # All were negative in round 2
+
+dat_extract_ids_dna_r2 = dat_extract_ids_r2 %>% select(household,record_id, id_ecantillon, )
+
+
 
 # Table hh size
 ch = wash_r0[wash_r0$menage_id%in%c(r0_ids),]
@@ -405,3 +512,15 @@ write_xlsx(car_r0, file)
 # Save inclusion list
 file <- paste0(DirectoryDataOut, "/bf_sample_ids_dna.xlsx")
 write_xlsx(dat_extract_ids, file)
+
+file <- paste0(DirectoryDataOut, "/bf_sample_ids_dna_r1.xlsx")
+write_xlsx(dat_extract_ids_dna_r1, file)
+
+file <- paste0(DirectoryDataOut, "/bf_sample_ids_dna_r2.xlsx")
+write_xlsx(dat_extract_ids_dna_r2, file)
+
+# Complete cases
+file <- paste0(DirectoryDataOut, "/dat_extract_ids_all.xlsx")
+write_xlsx(dat_extract_ids_all, file)
+
+

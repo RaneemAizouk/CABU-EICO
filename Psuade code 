@@ -1,0 +1,41 @@
+#  The code simulates the infection and recovery process over several days for a defined number of individuals.
+# Define the dimensions of the matrix
+num_individuals = SetNumberofIndividuals()  # Set the number of individuals for the simulation
+num_days = SetNumberofDays()  # Set the number of days for the simulation
+lamda1 = 0.2  # Initialize lamda1 value,background rate
+lamda2 = SetLamda2()  # Set lamda2 the rate associated with the infectious within the household.
+lamda3 = 0.2  #Set lamda3:  the likehood of individuals being initialy infected in the first day.
+probability of recovery = SetRecoveryRate()  # Set the the likelihood of an infected individual transitioning from the infected state to the recovered state within a specific timeframe. 
+num_simulations = SetNumberOfSimulations()  # Set the number of simulations
+
+# Create an empty matrix to represent individuals' infection status
+initial_infection_matrix = CreateEmptyMatrix(num_individuals, num_days)  # Initialize matrix with zeros which represents no infections status.
+
+# Introduce initial infections randomly for the first day
+for individual in num_individuals:
+    random_number = GenerateRandomNumber()  # Generate a random number between 0 and 1
+    
+    if random_number <  lamda3:
+        initial_infection_matrix[individual, 1] = 1  # Set individual as infected for day 1
+
+# Loop through each day
+for day in 2:num_days:
+    for individual in num_individuals:
+        # Check the individual's infection status on the previous day
+        was_infected = initial_infection_matrix[individual, day - 1]
+        
+        # Apply the recovery process for previously infected individuals
+        if was_infected == 1 and GenerateRandomNumber() < probability of recovery:
+            initial_infection_matrix[individual, day] = 0  # Change status to recovered
+        
+        # For individuals not infected on the previous day
+        if was_infected == 0:
+            force_of_infection = CalculateForceOfInfection(initial_infection_matrix, lamda1, lamda2, day - 1)
+            p = CalculateInfectionProbability(force_of_infection)
+            u_r_n = GenerateRandomNumber()
+            
+            # Check if the random value is less than the infection probability
+            if u_r_n < p:
+                initial_infection_matrix[individual, day] = 1  # Set status to infected
+            else:
+                initial_infection_matrix[individual, day] = 0  # Keep status as uninfected

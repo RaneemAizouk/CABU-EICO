@@ -1,0 +1,28 @@
+{
+    "id": "0127D04D",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1707638404401.0,
+    "source_on_save": false,
+    "relative_order": 9,
+    "properties": {
+        "id": "3ae3d290d07e40a0a12c67369eb89cbc",
+        "name": "nearest_times_list",
+        "title": "nearest_times_list",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 0,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1707638404401,
+    "read_only": false,
+    "read_only_alternatives": []
+}

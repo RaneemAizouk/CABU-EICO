@@ -1,0 +1,203 @@
+---
+title: "Simulations_Samples_Between_Host"
+
+output: Simulation of Disease Spread,Visualization of Individual Simulations,Time Point Rounding and Mean Calculation,Sampling at Specific Time Points, Time Point Rounding and Mean Calculation,  Sampling at Specific Time Points, Combining and Summarizing Sampled Data, Rounding Time Points for Further Analysis, Summary of Grouped and Rounded Data.
+date: "2024-01-10"
+---
+
+```{r }
+# Set the working directory to Desktop/Rfiles
+setwd("/Users/raizouk/Desktop/R files")
+
+# Load packages, checks if the "pacman" package is installed. If not, it installs the package and loads it.
+if (!require(pacman)) {
+  install.packages("pacman")
+  library(pacman)
+}
+
+p_load(viridis, adaptivetau)
+if (!require(msm)){
+install.packages("msm")
+library(msm)
+}
+# Clear workspace, remove all objects from the current environment.
+rm(list = ls())
+# 1) Simulate Disease Spread using  the Gillespie algorithm.
+# Source model functions, sources (loads) functions from the file named "between_host_invu_fn_raneem.R"
+source("./between_host_invu_fn_raneem3.R")
+
+# Initialize an empty list to store results
+results_list <- list()
+
+# Simulation Params
+# a sequence of time points from 0 to 14 with a step of 1.
+tvec <- seq(0, 14, 1)
+tmax<- max(tvec)
+lambda1 = 0.2
+lambda2 = 0.3
+rho = 0.2
+
+# Color palette for plotting
+cols <- viridis(3)
+
+# Stochastic simulation
+# we consider the simulations over the clusters and houses. 
+# Repeat simulations for (n.sims) times
+n.sims <- 50
+n.clusters <- 22
+houses_per_cluster <- 12
+for (sim in 1:n.sims) {
+  # Run simulations for each cluster
+  for (cluster in 1:n.clusters) {
+    # Run simulations for each house in the cluster
+    for (house in 1:houses_per_cluster) {
+      # Call the gillespe function
+      N <- sample(1:5, 1)  # Random number of individuals in the house with maximum 5 individuals per house.
+      S1 <- sample(0:N, 1)  # Random number of susceptible individuals in the house
+      I1 <- N - S1  # Ensure that S0 + I0 equals N
+      state.orig <- c(I = I1, S = S1)
+      result <-  gillespe (lambda1, lambda2 , rho,S1,I1,tmax,N)
+      
+      
+      # Store the result in the list
+      results_list[[length(results_list) + 1]] <- result
+    }
+  }
+}
+
+# 2) Find the mean which include a) Rounding the time points using the floor function. This step acknowledges that the mean cannot be calculated for continuous time points, so rounding them down to the nearest whole number provides discrete time points for aggregation
+# b) put them in a new list with the corresponding S and I values. c) find the mean 
+# To find the mean, we took the floor function on the time values to round them down to the nearest whole number and store the corresponding values for S and I in a data frame.
+# The resulting data frame (approx_list) provides a summarized view of the simulation results at discrete time points, making it easier to calculate and visualize the mean behavior over time.
+approx_list <- list() # create an empty list()
+for (item in results_list){
+  approx_list[[length(approx_list)+1]] <- data.frame(t=floor(item$t), S=item$S, I=item$I)
+}
+
+
+library(dplyr)
+# we will have repeated time values so we wanted to ensures to aggregate or summarise data at each unique time point. why we use group_by(t)
+grouped_approx_list <- do.call(rbind, approx_list) %>%
+  group_by(t) %>%
+  add_count(name="group_count") %>%
+  summarize(S = sum(S), I = sum(I), group_count=unique(group_count))
+# to combine the data frames in the list approx_list into a single data frame and then perform further operations using the %>% (pipe) operator.
+out.mean <- do.call(rbind,approx_list) %>%
+  # to combine similar time values. 
+  group_by(t) %>%
+  #group_count: provides the count of observations (group_count) for each unique time point in the data.
+  add_count(name="group_count") %>%
+  summarize(mean_S = sum(S)/ n(), mean_I = sum(I)/n(), group_count=unique(group_count))
+
+#print(out.mean)
+
+
+
+# Plot output
+
+names(out.mean) <- c("time", "S", "I")
+alphaval <- 0.3
+
+par(mfrow=c(1,1))
+plot(NULL,
+     las=1,xaxs="i",yaxs="i",ylim=c(0,6),bty="n",xlim=range(tvec),
+     xlab="time",ylab="Frequency")
+# Plot legend
+legend("topleft", bty="n", col=cols[1:2], legend=c("Susceptible", "Infected"), lwd=3)
+
+
+# Plot individual simulations
+for (ii in 1:n.sims) {
+  lines(results_list[[ii]]$t, results_list[[ii]]$S, col=adjustcolor(cols[1], alphaval))
+  lines(results_list[[ii]]$t, results_list[[ii]]$I, col=adjustcolor(cols[2], alphaval))
+}
+
+# Corrected lines for plotting the mean
+lines(out.mean[["time"]],out.mean[["S"]],col=adjustcolor(cols[1]),lwd=3)
+lines(out.mean[["time"]],out.mean[["I"]],col=adjustcolor(cols[2]),lwd=3)
+
+# 3) Drewing samples by choosing the nearst time point to the required time points c(3,6,9,12)
+
+# Assuming results_list is your list of results
+desired_time_points <- c(3, 6, 9, 12) #Specifies the time points of interest.
+#lapply(results_list, function(item) {...}): Applies a function to each element of results_list. The function takes one simulation result (item) at a time.
+#sapply on desired_time_points: sapply(desired_time_points, function(time) {...}): Applies a function to each element of desired_time_points for a given simulation result.
+
+nearest_times_list <- lapply(results_list, function(item) {
+  sapply(desired_time_points, function(time) {
+    closest_points <- item$t[item$t <= time]
+   # Selects time points in the simulation result (item$t) that are less than or equal to the current desired_time_point (time).
+    if (length(closest_points) > 0) {
+      return(tail(closest_points, 1))
+    } else {
+      return(NA)
+    }
+  })
+})
+
+#print(nearest_times_list)
+# Create Time_list
+# This code organises the 'S' and 'I' values from the simulation results at the time points identified as the nearest to the desired time points. It creates a list (Time_list), where each element corresponds to a simulation and contains a data frame with information for the specified time points.
+
+# Create an empty list to store unique time points for each simulation
+unique_times_list <- list()
+
+# Populate the unique_times_list
+for (i in seq_along(nearest_times_list)) {
+  unique_times_list[[i]] <- unique(unlist(nearest_times_list[[i]]))
+}
+
+# Create an empty list to store Time_list without duplicate time points
+Time_list <- list()
+
+# Populate the Time_list without duplicate time points
+for (i in seq_along(nearest_times_list)) {
+  time_points <- unique_times_list[[i]]
+  S_values <- results_list[[i]]$S[results_list[[i]]$t %in% time_points]
+  I_values <- results_list[[i]]$I[results_list[[i]]$t %in% time_points]
+  common_times <- results_list[[i]]$t[results_list[[i]]$t %in% time_points]
+  common_data <- data.frame(t = common_times, S = S_values, I = I_values)
+  merged_data <- merge(data.frame(t = time_points), common_data, by = "t", all.x = TRUE)
+  Time_list[[i]] <- merged_data
+}
+
+# Combine data from Time_list into a single data frame
+all_data <- do.call(rbind, Time_list)
+
+# Print the unique time points for each simulation
+#print(all_data)
+
+# Print the modified Time_list
+#print(Time_list)
+
+# Print the structure of the data frame
+str(all_data)
+# NNNNEEEWWWWW PAAARRTTT
+# Assuming Time_list is your list of results
+desired_time_points <- c(0, 3, 6, 9, 12)  # Specify the desired time points or intervals
+#rounded_times_list is the sample (Time_list)approximation
+# Approximate time points to the nearest upper value from the set of desired time points(0,3,6,9,12)
+rounded_times_list <- lapply(Time_list, function(item) {
+  item$t <- sapply(item$t, function(time) min(desired_time_points[desired_time_points >= time]))
+  return(item)
+})
+
+# Create a data frame for the rounded time points and sum of S and I values
+rounded_data <- do.call(rbind, lapply(rounded_times_list, function(item) {
+  data.frame(t = item$t, S = sum(item$S), I = sum(item$I))
+}))
+
+# Group the sample by rounded time points and summarize
+grouped_rounded_data <- rounded_data %>%
+  group_by(t) %>%
+  summarize(S = sum(S), I = sum(I), count = n())
+
+# Print the rounded_data
+#print(rounded_data)
+
+# Print the grouped_rounded_data
+print(grouped_rounded_data)
+
+
+```
+

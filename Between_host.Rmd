@@ -1,0 +1,66 @@
+---
+title: "Gillespie's Algorithm Simulation"
+output: html_document
+date: "2023-11-22"
+---
+
+# Set the working directory to Desktop/Rfiles
+
+```{r}
+setwd("/Users/raizouk/Desktop/R files")
+# Check if the "pacman" package is installed. If not, install it.
+if (!require(pacman)) {
+  install.packages("pacman")
+}
+
+# Load the "pacman" package
+library(pacman)
+
+p_load(viridis)
+source("./between_host_originalG_fn_raneem.R")
+# a sequence of time points from 0 to 14 with a step of 1.
+tvec <- seq(0, 14, 1)
+# Parameters for the model
+parms <- c(lambda1 = 0.2, lambda2 = 0.3, rho = 0.2)
+# Initial state of the system
+state.orig <- c(I = 2, S = 7)
+# Color palette for plotting
+cols <- viridis(3)
+N <- 9
+n.sims <- 100
+transitions <- list(
+  c(S = -1, I = 1),  # Infection
+  c(S = 1, I = -1)   # Recovery
+)
+rates_function <- function(X) {
+  lambda1 <- parms["lambda1"]  # Background infections from outside the household
+  lambda2 <- parms["lambda2"]  # Infection rate within the household
+  rho <- parms["rho"]
+  
+  # Rates of infection and recovery
+  rate_infection <- (lambda1 + lambda2 * X["I"]) * X["S"]
+  rate_recovery <- rho * X["I"]
+  
+  return(c(rate_infection, rate_recovery))
+}
+state <- as.vector(rmultinom(1, size = N, prob = c(0.2, 0.8)))
+names(state) <- names(state.orig)
+
+# Run the stochastic simulation
+out <- replicate(n.sims, t(betweenhost.stoch(tvec, state, parms)))
+alphaval <- 0.15
+par(mfrow = c(1, 1))
+plot(NULL,
+     las = 1, xaxs = "i", yaxs = "i", ylim = c(0, 10), bty = "n", xlim = range(tvec),
+     xlab = "Day", ylab = "Number")
+for (ii in 1:n.sims) {
+  lines(out["time",,ii], out["S",,ii], col = adjustcolor(cols[1], alphaval))
+  lines(out["time",,ii], out["I",,ii], col = adjustcolor(cols[2], alphaval))
+}
+legend("topleft", bty = "n", col = cols[1:2], legend = c("Susceptible", "Infected"),
+       lwd = 3)
+out.mean <- apply(out, c(1, 2), mean)
+names(out.mean) <- names(state)
+lines(out.mean["time",], out.mean["S",], col = adjustcolor(cols[1]), lwd = 3)
+lines(out.mean["time",], out.mean["I",], col = adjustcolor(cols[2]), lwd = 3)
+

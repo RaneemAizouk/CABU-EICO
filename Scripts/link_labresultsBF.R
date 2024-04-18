@@ -929,89 +929,6 @@ test = abx %>% group_by(village.cluster, round, providertype) %>%
 write_xlsx(data_eccmid_hh, paste0(DirectoryDataOut, "/data_colonisation_eccmid.xlsx"))
 
 
-#####################################################
-# ANALYSES FOR ECCMID ABSTRACT
-#####################################################
-
-coldata<-readxl::read_xlsx("./Data/BF/clean/data_colonisation_eccmid.xlsx")
-
-# Note that if acquisition occurs in between screening round 0 (baseline) and round 1 (at time of intervention)
-# then an acquisition cannot occur between round 1 and round 2 (3 month later) because individual will 
-# already be positive at round 1. And if already positive at round 1 individual will not be at risk 
-# of a post-intervention acquisition
-# Note that field r2_acquisition currently doesn't take into account that individuals are not 
-# at risk in round 1 
-
-# Proposed analysi 1 s -  include in analysis only if a negative swab at round one
-# i.e r1_esbl_pos =0   and a swab (whether pos or neg) at round 2 (i.e r2_esbl_pos is 1 or 0)
-#  outcome is 1 if r2_esbl_pos  
-# adjust for clustering at household level (menage_id) and include covariates for age (age), sex (sexe) and 
-# intervention (as coded in field intervention_text)
-# then as a sensitivity analysis consider only thoe with two initial negative swab
-
-coldata$include_in_analysis1<-coldata$r1_esbl_pos == 0 & (coldata$r2_esbl_pos ==1 |coldata$r2_esbl_pos ==0)
-
-coldata[ , c(4,5,6,7,12,15,16,92)]
-
-coldataforanalysis1<-coldata[coldata$include_in_analysis1==TRUE & !is.na(coldata$include_in_analysis1), c(1,2,4,5,6,7,10,13,16,17,18,19,20,21,22,23,24,93)]
-names(coldataforanalysis1)
-
-coldataforanalysis1$intervention<-ifelse(coldataforanalysis1$intervention_text=="intervention",1 , 0)
-
-
-# first with no random effects or other covariates
-logreg0<-glm(r2_esbl_pos ~ intervention , data=coldataforanalysis1,  family = binomial(link = "logit"))
-summary(logreg0)
-exp(logreg0$coefficients)
-exp(confint(logreg0)) # # Effect intervention: OR = 1.14 (CI:0.75 - 1.73)
-
-
-# then with covariates and random effects 
-logreg1<-glmer(r2_esbl_pos ~ age + sexe + intervention + (1|menage_id), data=coldataforanalysis1,  family = binomial(link = "logit"))
-summary(logreg1)
-exp(fixef(logreg1))
-exp(confint(logreg1, method="Wald"))[2:5,]  # Effect intervention: OR = 1.23 (CI:0.74 - 2.01)
-
-
-
-# now repeat but with a sensitivity analysis only taking those with first two swabs negative as at risk (as these are those we are most confident of not beng colonised)
-coldata$include_in_analysis2<-coldata$esbl_pos==0 & coldata$r1_esbl_pos == 0 & (coldata$r2_esbl_pos ==1 |coldata$r2_esbl_pos ==0)
-
-coldata[ , c(4,5,6,7,12,15,16,93)]
-
-
-coldataforanalysis2<-coldata[coldata$include_in_analysis2==TRUE & !is.na(coldata$include_in_analysis1), c(1,2,4,5,6,7,10,13,16,17,18,19,20,21,22,23,24,93)]
-coldataforanalysis2$intervention<-ifelse(coldataforanalysis2$intervention_text=="intervention",1 , 0)
-
-# first with no random effects or other covariates
-logreg0sens1<-glm(r2_esbl_pos ~ intervention , data=coldataforanalysis2,  family = binomial(link = "logit"))
-summary(logreg0sens1)
-exp(logreg0sens1$coefficients)
-exp(confint(logreg0sens1)) # # Effect intervention: OR = 0.90 (CI:0.50 - 1.62)
-
-
-logreg1sens1<-glmer(r2_esbl_pos ~ age + sexe + intervention + (1|menage_id), data=coldataforanalysis2,  family = binomial(link = "logit"))
-
-# random effects models fails with error "boundary (singular) fit: see help('isSingular')"
-
-# fixed effects with covariates
-logreg1sens1a<-glm(r2_esbl_pos ~ age + sexe + intervention , data=coldataforanalysis2,  family = binomial(link = "logit"))
-summary(logreg1sens1a)
-coef = exp(logreg1sens1a$coefficients)
-ci = exp(confint(logreg1sens1a))
-cbind(coef,ci) # Effect intervention: OR = 1.02 (CI:0.55 - 1.87)
-
-sum(complete.cases(coldata[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")])) # 892
-d = coldata %>% filter(complete.cases(coldata[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")]))
-length(unique(d$menage_id))
-table(d$esbl_pos)
-
-
-
-
-
-
-
 ###########################################################
 # DESCRIPTIVE STATISTICS
 ###########################################################
@@ -1286,5 +1203,88 @@ t1flex(wash_r0_table1) %>%
 # t1flex(wash_r0_village) %>% 
 #   save_as_docx(path="./Output/Tables/wash_r0_village.docx",
 #                page_size = officer::page_size(width = 21, height = 29.7/2.54, orient = "landscape"))
+
+
+
+#####################################################
+# ANALYSES FOR ECCMID ABSTRACT
+#####################################################
+
+coldata<-readxl::read_xlsx("./Data/BF/clean/data_colonisation_eccmid.xlsx")
+
+# Note that if acquisition occurs in between screening round 0 (baseline) and round 1 (at time of intervention)
+# then an acquisition cannot occur between round 1 and round 2 (3 month later) because individual will 
+# already be positive at round 1. And if already positive at round 1 individual will not be at risk 
+# of a post-intervention acquisition
+# Note that field r2_acquisition currently doesn't take into account that individuals are not 
+# at risk in round 1 
+
+# Proposed analysi 1 s -  include in analysis only if a negative swab at round one
+# i.e r1_esbl_pos =0   and a swab (whether pos or neg) at round 2 (i.e r2_esbl_pos is 1 or 0)
+#  outcome is 1 if r2_esbl_pos  
+# adjust for clustering at household level (menage_id) and include covariates for age (age), sex (sexe) and 
+# intervention (as coded in field intervention_text)
+# then as a sensitivity analysis consider only thoe with two initial negative swab
+
+coldata$include_in_analysis1<-coldata$r1_esbl_pos == 0 & (coldata$r2_esbl_pos ==1 |coldata$r2_esbl_pos ==0)
+
+coldata[ , c(4,5,6,7,12,15,16,92)]
+
+coldataforanalysis1<-coldata[coldata$include_in_analysis1==TRUE & !is.na(coldata$include_in_analysis1), c(1,2,4,5,6,7,10,13,16,17,18,19,20,21,22,23,24,93)]
+names(coldataforanalysis1)
+
+coldataforanalysis1$intervention<-ifelse(coldataforanalysis1$intervention_text=="intervention",1 , 0)
+
+
+# first with no random effects or other covariates
+logreg0<-glm(r2_esbl_pos ~ intervention , data=coldataforanalysis1,  family = binomial(link = "logit"))
+summary(logreg0)
+exp(logreg0$coefficients)
+exp(confint(logreg0)) # # Effect intervention: OR = 1.14 (CI:0.75 - 1.73)
+
+
+# then with covariates and random effects 
+logreg1<-glmer(r2_esbl_pos ~ age + sexe + intervention + (1|menage_id), data=coldataforanalysis1,  family = binomial(link = "logit"))
+summary(logreg1)
+exp(fixef(logreg1))
+exp(confint(logreg1, method="Wald"))[2:5,]  # Effect intervention: OR = 1.23 (CI:0.74 - 2.01)
+
+
+
+# now repeat but with a sensitivity analysis only taking those with first two swabs negative as at risk (as these are those we are most confident of not beng colonised)
+coldata$include_in_analysis2<-coldata$esbl_pos==0 & coldata$r1_esbl_pos == 0 & (coldata$r2_esbl_pos ==1 |coldata$r2_esbl_pos ==0)
+
+coldata[ , c(4,5,6,7,12,15,16,93)]
+
+
+coldataforanalysis2<-coldata[coldata$include_in_analysis2==TRUE & !is.na(coldata$include_in_analysis1), c(1,2,4,5,6,7,10,13,16,17,18,19,20,21,22,23,24,93)]
+coldataforanalysis2$intervention<-ifelse(coldataforanalysis2$intervention_text=="intervention",1 , 0)
+
+# first with no random effects or other covariates
+logreg0sens1<-glm(r2_esbl_pos ~ intervention , data=coldataforanalysis2,  family = binomial(link = "logit"))
+summary(logreg0sens1)
+exp(logreg0sens1$coefficients)
+exp(confint(logreg0sens1)) # # Effect intervention: OR = 0.90 (CI:0.50 - 1.62)
+
+
+logreg1sens1<-glmer(r2_esbl_pos ~ age + sexe + intervention + (1|menage_id), data=coldataforanalysis2,  family = binomial(link = "logit"))
+
+# random effects models fails with error "boundary (singular) fit: see help('isSingular')"
+
+# fixed effects with covariates
+logreg1sens1a<-glm(r2_esbl_pos ~ age + sexe + intervention , data=coldataforanalysis2,  family = binomial(link = "logit"))
+summary(logreg1sens1a)
+coef = exp(logreg1sens1a$coefficients)
+ci = exp(confint(logreg1sens1a))
+cbind(coef,ci) # Effect intervention: OR = 1.02 (CI:0.55 - 1.87)
+
+sum(complete.cases(coldata[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")])) # 892
+d = coldata %>% filter(complete.cases(coldata[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")]))
+length(unique(d$menage_id))
+table(d$esbl_pos)
+
+
+
+
 
 

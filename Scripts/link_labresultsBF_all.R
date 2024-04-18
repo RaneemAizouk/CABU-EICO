@@ -543,16 +543,17 @@ HR0_all = HR0_all %>% select(-c(redcap.event.name.x,redcap.event.name.y,
          r0.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
          r0.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
   )
+#View(HR0_all %>% filter(is.na(record_id)))
 HR0_all$redcap_event_name = "round_0_arm_1"
 HR0_all = left_join(HR0_all,villages, by="village")
 HR0_all = HR0_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
   rename(village_name = "village_name.y",
          intervention_text = "intervention_text.y") %>% 
   mutate(ast_done = 
-           ifelse(is.na(record_id), "No", "Yes"))
+           ifelse(is.na(record_id), "No", "Yes")) %>%
+  select(-c(record_id))
   
 
-#View(HR0_all %>% filter(is.na(record_id)))
 
 # which IDs have a salmonella?
 idsalm = HR0_all$menage_id_member[HR0_all$r0.salm == "Yes"]
@@ -702,7 +703,8 @@ HR1_all = HR1_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
   rename(village_name = "village_name.y",
          intervention_text = "intervention_text.y")%>% 
   mutate(ast_done = 
-           ifelse(is.na(record_id), "No", "Yes"))
+           ifelse(is.na(record_id), "No", "Yes"))%>%
+  select(-c(record_id))
 
 
 # which IDs have a salmonella?
@@ -851,7 +853,8 @@ HR2_all = HR2_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
   rename(village_name = "village_name.y",
          intervention_text = "intervention_text.y")%>% 
   mutate(ast_done = 
-           ifelse(is.na(record_id), "No", "Yes"))
+           ifelse(is.na(record_id), "No", "Yes"))%>%
+  select(-c(record_id))
 
 # which IDs have a salmonella?
 idsalm = HR2_all$menage_id_member[HR2_all$r2.salm == "Yes"]
@@ -1000,7 +1003,8 @@ HR3_all = HR3_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
   rename(village_name = "village_name.y",
          intervention_text = "intervention_text.y")%>% 
   mutate(ast_done = 
-           ifelse(is.na(record_id), "No", "Yes"))
+           ifelse(is.na(record_id), "No", "Yes"))%>%
+  select(-c(record_id))
 
 # which IDs have a salmonella?
 idsalm = HR3_all$menage_id_member[HR3_all$r3.salm == "Yes"]

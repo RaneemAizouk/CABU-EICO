@@ -136,16 +136,24 @@ hh_bf = hh_bf %>% mutate(
                                                                   "Certaine nouriture", "CERTAINE NOURITURE","Certains nouriture",
                                                                   "CERTAINS NOURITURE", "Eviter certain nouriture"), "certain_food",
                                    ifelse(autr_mesur_prev_diarrhe %in% c("LAVAGE DES MAINS AVANT ET APRES LE REPAS"), "hand washing", "")),
-  q2_source_princ_saison_seche = factor(q2_source_princ_saison_seche, levels=c(1:9), labels=c("Tapwater in house", "Tapwater concession",
-                                                                                              "Public tap/fountain", "Borehole",
-                                                                                              "unimproved well(unprotected)","rainwater",
-                                                                                              "surface water(ponds, dams,rivers,lakes,pits,irrigation canels",
-                                                                                              "water in bags", "bottled water")),
-  q3_source_princ_saison_pluv = factor(q3_source_princ_saison_pluv, levels=c(1:9), labels=c("Tapwater in house", "Tapwater concession",
-                                                                                             "Public tap/fountain", "Borehole",
-                                                                                             "unimproved well(unprotected)","rainwater",
-                                                                                             "surface water(ponds, dams,rivers,lakes,pits,irrigation canels",
-                                                                                             "water in bags", "bottled water")),  
+  q2_source_princ_saison_seche = factor(q2_source_princ_saison_seche, levels=c(1:9), labels=c("Tap house", 
+                                                                                              "Tap concession",
+                                                                                              "Tap public/fountain", 
+                                                                                              "Borehole",
+                                                                                              "improved well (protected)",
+                                                                                              "unimproved well (unprotected)",
+                                                                                              "rainwater",
+                                                                                              "surface water (ponds, dams,rivers,lakes,pits,irrigation canals)",
+                                                                                              "bagged water")),
+  q3_source_princ_saison_pluv = factor(q3_source_princ_saison_pluv, levels=c(1:10), labels=c("Tap house", 
+                                                                                             "Tap concession",
+                                                                                             "Tap public/fountain", 
+                                                                                             "Borehole",
+                                                                                             "improved well (protected)",
+                                                                                             "unimproved well(unprotected)",
+                                                                                             "rainwater",
+                                                                                             "surface water (ponds, dams,rivers,lakes,pits,irrigation canals)",
+                                                                                             "bagged water", "bottled water")),  
   q4_bidon_stock = factor(q4_bidon_stock, levels = c(1:3), labels=c("Yes, cans", "Yes, only one large tank", "No")),
   q5a_bidon_ferme_rempli = factor(q5a_bidon_ferme_rempli, levels=c(1:2), labels=c("Yes", "No")),
   q5b_bidon_ferme_vide = factor(q5b_bidon_ferme_vide, levels=c(1:2), labels=c("Yes", "No")),           
@@ -467,6 +475,7 @@ table(HRs$esbl_pos)
 
 HR0_all = rbind(HRe_w,HRe2_w,HRs_w)
 table(HR0_all$esbl_pos)
+names(HR0_all)
 
 # Now add those ones with no E.coli-E or salmonella
 testedR0 = hh_bf_lab_de$menage_id_member[hh_bf_lab_de$menage_id_member%in%c(HR0_all$menage_id_member)]
@@ -488,6 +497,8 @@ hh_bf_lab_de_R0_no = hh_bf_lab_de_R0_no[,which(names(hh_bf_lab_de_R0_no) %in% de
 
 HR0_all = rbind(HR0_all,hh_bf_lab_de_R0_no)
 
+
+
 # Check if cohort is complete
 length(unique(HR0_all$menage_id_member))
 table(HR0_all$germe_c, HR0_all$esbl_pos)
@@ -497,7 +508,8 @@ table(car_bf_r0$germe_c, car_bf_r0$esbl_pos) # difference of 3 comes from the du
 # Keep only relevant variables
 names(HR0_all)
 
-HR0_all = HR0_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
+HR0_all = HR0_all %>% select(-c(redcap.event.name.x,redcap.event.name.y,
+                                village_name.y,redcap_repeat_instrument,redcap_repeat_instance,
                                 check_list, id_ecantillon, morphotyp, germe, testesbl,
                                 rsultats_antibiogramme_portage_asymptomatique_salm_complete,
                                 interpretr_ampici_amoxicil,comment_ampici_amoxic,
@@ -531,6 +543,16 @@ HR0_all = HR0_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          r0.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
          r0.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
   )
+HR0_all$redcap_event_name = "round_0_arm_1"
+HR0_all = left_join(HR0_all,villages, by="village")
+HR0_all = HR0_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
+  rename(village_name = "village_name.y",
+         intervention_text = "intervention_text.y") %>% 
+  mutate(ast_done = 
+           ifelse(is.na(record_id), "No", "Yes"))
+  
+
+#View(HR0_all %>% filter(is.na(record_id)))
 
 # which IDs have a salmonella?
 idsalm = HR0_all$menage_id_member[HR0_all$r0.salm == "Yes"]
@@ -674,6 +696,15 @@ HR1_all = HR1_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          r1.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
   )
 
+HR1_all$redcap_event_name = "round_1_arm_1"
+HR1_all = left_join(HR1_all,villages, by="village")
+HR1_all = HR1_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
+  rename(village_name = "village_name.y",
+         intervention_text = "intervention_text.y")%>% 
+  mutate(ast_done = 
+           ifelse(is.na(record_id), "No", "Yes"))
+
+
 # which IDs have a salmonella?
 idsalm = HR1_all$menage_id_member[HR1_all$r1.salm == "Yes"]
 
@@ -814,6 +845,13 @@ HR2_all = HR2_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          r2.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
          r2.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
   )
+HR2_all$redcap_event_name = "round_2_arm_1"
+HR2_all = left_join(HR2_all,villages, by="village")
+HR2_all = HR2_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
+  rename(village_name = "village_name.y",
+         intervention_text = "intervention_text.y")%>% 
+  mutate(ast_done = 
+           ifelse(is.na(record_id), "No", "Yes"))
 
 # which IDs have a salmonella?
 idsalm = HR2_all$menage_id_member[HR2_all$r2.salm == "Yes"]
@@ -956,6 +994,13 @@ HR3_all = HR3_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          r3.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
          r3.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
   ) 
+HR3_all$redcap_event_name = "round_3_arm_1"
+HR3_all = left_join(HR3_all,villages, by="village")
+HR3_all = HR3_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
+  rename(village_name = "village_name.y",
+         intervention_text = "intervention_text.y")%>% 
+  mutate(ast_done = 
+           ifelse(is.na(record_id), "No", "Yes"))
 
 # which IDs have a salmonella?
 idsalm = HR3_all$menage_id_member[HR3_all$r3.salm == "Yes"]
@@ -1109,7 +1154,7 @@ HR_e_total_wide = HR_e_total_wide %>% select(-c(redcap_event_name, date, date_co
                          diametr_ampici_amoxici, diametr_amoxi_acid_clavu,diametr_piepera_tazobac,                    
                          diametr_cetriax_or_cefota,diametr_cefepime, diametr_meropenem, diametr_ertapenem,                          
                          diametr_gentamycine, diametr_amykacine, diametr_ciprofloxacine, diametr_pfloxacine,                         
-                         diametr_sulfamet_trimeth))
+                         diametr_sulfamet_trimeth, esble))
 
 
 table(HR_e_total_wide$r0.esble)
@@ -1125,6 +1170,25 @@ table(HR_e_total_wide$r3.esble)
 table(HR3_e$r3.esble)
 
 length(unique(HR_e_total_wide$menage_id_member))
+
+# Create acquisition variables
+HR_e_total_wide = HR_e_total_wide %>% mutate(
+  m3.acquisition.r0 = ifelse(r0.esble=="No" & r2.esble=="Yes", "Yes", 
+                             ifelse(r0.esble=="Yes", NA,"No")),
+  m9.acquisition.r0 = ifelse(r0.esble=="No" & r3.esble=="Yes", "Yes", 
+                             ifelse(r0.esble=="Yes", NA,"No")),
+  m3.acquisition.r1 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
+                             ifelse(r0.esble=="Yes", NA,"No")),
+  m9.acquisition.r1 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
+                             ifelse(r0.esble=="Yes"|r2.esble=="Yes", NA,"No"))
+)
+
+sapply(HR_e_total_wide%>%select(m3.acquisition.r0,m3.acquisition.r1,m9.acquisition.r0,m9.acquisition.r1),
+       function(x) table(x, useNA="always"))
+
+table(HR_e_total_wide$r0.esble,HR_e_total_wide$r2.esble)
+table(HR_e_total_wide$r0.esble,HR_e_total_wide$r3.esble)
+
 
 # Export dataset
 write.csv(HR_e_total_wide, paste0(DirectoryDataOut, "./linked_final/bf_hh_stool_esble_r0123_wide.csv")) 
@@ -1149,11 +1213,11 @@ sum(complete.cases(HR_e_total_wide[, c("r0.esble", "r1.esble", "r2.esble", "r3.e
 # Date: 15 April 2024
 
 # Descriptives for which variables to include in analyses
-table(HR0_all$r0.esble)
+table(HR0_e$r0.esble)
 
 # Table 1
-sapply(HR0_all, function(x) table(x))
-sapply(HR0_all, function(x) class(x))
+sapply(HR0_e, function(x) table(x))
+sapply(HR0_e, function(x) class(x))
 
 # trial
 wash_r0_table1 = table1(~ intervention.text + age +
@@ -1210,63 +1274,11 @@ wash_r0_table1 = table1(~ intervention.text + age +
                           q21.when.animal.ill.eat.meat.at.home +     
                           q21.when.animal.ill.burie.dispose +
                           q21.when.animal.ill.autre +     
-                          eau.assainissement.hygine.complete| factor(r0.esble), data=HR0_all)
+                          eau.assainissement.hygine.complete| factor(r0.esble), data=HR0_e)
 wash_r0_table1
-
-# By cluster
-wash_r0_village = table1(~ factor(intervention_text) + as.numeric(age) +
-                          + factor(q2_source_princ_saison_seche) 
-                        + factor(q3_source_princ_saison_pluv)
-                        + factor(q4_bidon_stock)                    
-                        + factor(q5a_bidon_ferme_rempli)
-                        + factor(q5b_bidon_ferme_vide)
-                        + factor(q5c_bidon_nettoye)
-                        + factor(q6_traite_eau)
-                        + factor(q7_type_inst_sanitaire)
-                        + factor(q9_toilette_partagee)
-                        + factor(q10_combien_partag)
-                        + factor(q11_dernier_nettoyage)
-                        + factor(q12_elimine_selle_enf)
-                        + factor(q13_vidange_toilette)
-                        + factor(q14_produit_lavag_main)
-                        + factor(q15_lave_apr_defec)
-                        + factor(q16_lave_apr_repas)
-                        + factor(q17_animaux_menage)
-                        + factor(q1_diarrhee_prevenu___2)
-                        + factor(q1_diarrhee_prevenu___3)
-                        + factor(q1_diarrhee_prevenu___4)          
-                        + factor(q1_diarrhee_prevenu___5)
-                        + factor(q1_diarrhee_prevenu___6)
-                        + factor(q1_diarrhee_prevenu___7)          
-                        + factor(q1_diarrhee_prevenu___8)
-                        + factor(q1_diarrhee_prevenu___9)
-                        + factor(q18_animaux_interieur___1)
-                        + factor(q18_animaux_interieur___2)
-                        + factor(q18_animaux_interieur___3)
-                        + factor(q18_animaux_interieur___4)
-                        + factor(q18_animaux_interieur___5)
-                        + factor(q18_animaux_interieur___6)
-                        + factor(q19_animaux_dehors___1)
-                        + factor(q19_animaux_dehors___2)
-                        + factor(q19_animaux_dehors___3)
-                        + factor(q19_animaux_dehors___4)
-                        + factor(q19_animaux_dehors___5)
-                        + factor(q19_animaux_dehors___6)
-                        + factor(q20_excrement_animaux)
-                        + factor(q21_animal_malade___1)
-                        + factor(q21_animal_malade___2)
-                        + factor(q21_animal_malade___3)
-                        + factor(q21_animal_malade___4)
-                        +factor(q21_animal_malade___5)
-                        + factor(q21_animal_malade___6)
-                        + factor(eau_assainissement_hygine_complete)| factor(village_name), data=HR0_all)
-wash_r0_village
 
 t1flex(wash_r0_table1) %>% 
   save_as_docx(path="./Output/Tables/wash_r0_table1.docx")
 
-t1flex(wash_r0_village) %>% 
-  save_as_docx(path="./Output/Tables/wash_r0_village.docx",
-               page_size = officer::page_size(width = 21, height = 29.7/2.54, orient = "landscape"))
 
 

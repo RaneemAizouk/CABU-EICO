@@ -10,7 +10,8 @@
 rm(list=ls())
 
 # load package
-pacman::p_load(readxl, writexl, lubridate, zoo, ggplot2, tidyverse, Hmisc, stringr,lme4,reshape2)
+pacman::p_load(readxl, writexl, lubridate, zoo, ggplot2, tidyverse, Hmisc, stringr,lme4,reshape2, 
+               openxlsx, table1, flextable, magrittr, officer)
 
 # SET DIRECTORY
 DirectoryData <- "./Data/BF/Raw"
@@ -18,24 +19,40 @@ DirectoryDataOut <- "./Data/BF/clean"
 
 # Lab data
 #car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_manualchange_no_password.xlsx"))
-car_r0 = read_xlsx(paste0(DirectoryData,"/CABUBPortageAsymptom_DATA_2023-10-17_nopassword.xlsx"))
-car_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=1)
-car_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=2)
+#car_r0_old = read_xlsx(paste0(DirectoryData,"/householdsurvey/CABUBPortageAsymptom_DATA_2023-10-17.xlsx"))
+#car_r1_old = read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=1)
+#car_r2_old = read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_2024-02-05_1720.xlsx"), sheet=2)
+
+car_r0123 = read.csv(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_2024-04-17_1527.csv"), sep=";")
+
+car_r0 = car_r0123 %>% filter(redcap_event_name %in% "round_0_arm_1")
+car_r1 = car_r0123 %>% filter(redcap_event_name %in% "round_1_arm_1")
+car_r2 = car_r0123 %>% filter(redcap_event_name %in% "round_2_arm_1")
+car_r3 = car_r0123 %>% filter(redcap_event_name %in% "round_3_arm_1")
+
+#View(car_r0[!car_r0$record_id %in% car_r0_old$record_id,])
 
 
 # Lab ids vs household ids
-hh_lab_ids =  read_xlsx(paste0(DirectoryData,"/Correspondande-Code_Lab-ID_Menage.xlsx"))
+hh_lab_ids =  readxl::read_xlsx(paste0(DirectoryData,"/Correspondande-Code_Lab-ID_Menage.xlsx"))
 names(hh_lab_ids)
 names(car_r0)
 names(hh_lab_ids) = c("household", "menage_id", "bras")
 
 # Household data
-wash_r0 = read_xls(paste0(DirectoryData, "/WP4_WASH_07_09_2023_nopassword.xls"))
-wash_r1 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=1) # These wash_r1 and wash_r2 are not householdsurvey data; but do provide denominator data for lab R1 and R2
-wash_r2 = read_xlsx(paste0(DirectoryData, "/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24_nopassword.xlsx"), sheet=2)
+#wash_r0_old = read_xlsx(paste0(DirectoryData, "/householdsurvey/WP4_WASH_07_09_2023.xlsx"))
+#wash_r1_old = read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24.xlsx"), sheet=1) # These wash_r1 and wash_r2 are not householdsurvey data; but do provide denominator data for lab R1 and R2
+#wash_r2_old = read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_R1_R2_2024-01-24.xlsx"), sheet=2)
+wash_r0123 = readxl::read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUBWP4_DATA_2024-04-17_1528.xlsx"))
+
+wash_r0 = wash_r0123 
+wash_r1 = wash_r0123 %>% filter(redcap_event_name %in% "round_1_arm_1")
+wash_r2 = wash_r0123 %>% filter(redcap_event_name %in% "round_2_arm_1")
+wash_r3 = wash_r0123 %>% filter(redcap_event_name %in% "round_3_arm_1")
+
 
 # Villages (that are the clusters) of CABU-EICO
-villages = read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
+villages = readxl::read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
 names(villages) = c("village", "village_name","intervention_text","ajouter")
 
 
@@ -78,7 +95,7 @@ car_r2 = merge(car_r2, villages, by="village")
 ############################################################
 
 # Clean germe; diameters are CLSI guidelines, 
-# Brecht discussed with Jan jacobs, there understood ESBL positive is defined as cetriax/cefo <=22 (including I and R, based on CLSI guidelines,
+# Jan jacobs comm: ESBL positive is defined as cetriax/cefo <=22 (including I and R, based on CLSI guidelines,
 # See in WP6 folder "word file: Interpretation antibiogramme des isolats PORTAGE asymptomatique_ESBL_E. coliKlebsielle.docx), 
 # So I understood to use this, instead of esbltest == 1 
 # This is then interpreted as, cetriax/cefo resistant following ESBL selective medium)
@@ -288,7 +305,7 @@ length(unique(wash_r0$menage_id))
 # Can all IDs be traced back from lab to wash survey?
 car_r0$found_in_wash[which(car_r0$menage_id %in% wash_r0$menage_id)] = 1
 car_r0$found_in_wash[is.na(car_r0$found_in_wash)] = 0
-length(unique(car_r0$household[car_r0$found_in_wash==0])) # 3 households can not be found in WASH survey database; 
+length(unique(car_r0$household[car_r0$found_in_wash==0])) # after cleaning, all households can be found in WASH survey database; 
 unique(car_r0$menage_id[car_r0$found_in_wash==0])
 unique(car_r0$household[car_r0$found_in_wash==0])
 
@@ -320,7 +337,7 @@ unique(wash_r0$cs_id_individu)
 
 # THEN for car_r0 we take also menage_Id and digits after the "-", remove the 0's then two can be combined
 
-# Change IDs to the same format(not finalised)
+# Change IDs to the same format
 
 # Create a variable in which we will safe the new formatted and cleaned ID
 wash_r0_lab$menage_id_member = NA
@@ -334,10 +351,11 @@ wash_r0_lab$member =  gsub(".*M", "", wash_r0_lab$cs_id_individu)
 wash_r0_lab$member = as.character(as.numeric(wash_r0_lab$member))
 # Check the one's which are now NA
 table(is.na(wash_r0_lab$member))
-wash_r0_lab$cs_id_individu[is.na(wash_r0_lab$member)] # 5 individuals have a household member number missing
-wash_r0_lab$num_echantillon[is.na(wash_r0_lab$member)] # of two we can get them from num_echantillon
-wash_r0_lab$member[wash_r0_lab$cs_id_individu=="CRAS1003"] = "1"
-wash_r0_lab$member[wash_r0_lab$cs_id_individu=="SCA00101"] = "3"
+wash_r0_lab$cs_id_individu[is.na(wash_r0_lab$member)] # 22 individuals have a household member number missing
+#View(wash_r0_lab[is.na(wash_r0_lab$member),])
+wash_r0_lab$num_echantillon[is.na(wash_r0_lab$member)] # of 0 we can get them from num_echantillon
+#wash_r0_lab$member[wash_r0_lab$cs_id_individu=="CRAS1003"] = "1" not needed anymore after cleaned datasets 17/4/2024
+#wash_r0_lab$member[wash_r0_lab$cs_id_individu=="SCA00101"] = "3" not needed anymore after cleaned datasets 17/4/2024
 table(is.na(wash_r0_lab$member))
 
 
@@ -350,18 +368,18 @@ table(is.na(wash_r0_lab$menage_id_member))
 
 
 # Check if dubplicates from wash_r0
-table(duplicated(wash_r0_lab$menage_id_member)) # 14 duplicates
+table(duplicated(wash_r0_lab$menage_id_member)) # 21 duplicates
 dups = unique(wash_r0_lab$menage_id_member[duplicated(wash_r0_lab$menage_id_member)])
 #View(wash_r0_lab[which(wash_r0_lab$menage_id_member%in%dups),])
 # For   "SCB00002402-7", "SCB00002402-8"  "SCB00002402-9"  "SCB00002402-10" "SCB00002402-11" "SCB00002402-12"
 # THese are entered double, so keep the ones without NA for age
-nkeep = which(wash_r0_lab$menage_id_member%in%c("SCB00002402-7", "SCB00002402-8",  "SCB00002402-9" ,
-                                                "SCB00002402-10" ,"SCB00002402-11", "SCB00002402-12") & is.na(wash_r0_lab$age)) 
+#nkeep = which(wash_r0_lab$menage_id_member%in%c("SCB00002402-7", "SCB00002402-8",  "SCB00002402-9" ,
+#                                                "SCB00002402-10" ,"SCB00002402-11", "SCB00002402-12") & is.na(wash_r0_lab$age)) 
 
-wash_r0_lab_d = wash_r0_lab[-c(nkeep),]
+#wash_r0_lab_d = wash_r0_lab[-c(nkeep),]
 
 # Then for remainder keep first record for now
-wash_r0_lab_de = wash_r0_lab_d %>% filter(!duplicated(menage_id_member)) # STILL NEED TO DO CHECKING FOR THOSE THAT ARE DUPLICATES BUT KEEP LIKE THIS FOR NOW
+wash_r0_lab_de = wash_r0_lab %>% filter(!duplicated(menage_id_member)) # STILL NEED TO DO CHECKING FOR THOSE THAT ARE DUPLICATES BUT KEEP LIKE THIS FOR NOW
 table(duplicated(wash_r0_lab_de$menage_id_member)) # 
 
 
@@ -401,7 +419,7 @@ d = humanR0[humanR0$menage_id_member%in% dups_members,]
 # Keep only ESBL positives
 d_dup = d %>% filter(esbl_pos==1)
 
-length(d_dup$menage_id_member[duplicated(d_dup$menage_id_member)]) # 94 individuals left
+length(d_dup$menage_id_member[duplicated(d_dup$menage_id_member)]) # 97 individuals left
 # Keep only one record of those as we only need to know IF they were ESBL positive, not how many strains
 d_dup = d_dup%>%filter(!duplicated(menage_id_member))
 
@@ -435,7 +453,7 @@ HR0 = HR0 %>%
 # ARE ALL MERGED? 
 no_m = which(!car_r0$menage_id_member %in%HR0$menage_id_member) # THESE ONES CAN NOT BE MATCHED AND NEED CHECKING
 length(no_m)
-car_r0$menage_id_member[no_m] # WE LOSE 30 individuals and need checking
+car_r0$menage_id_member[no_m] # WE LOSE 11 individuals and need checking
 
 
 # Select relevant variables from the household survey
@@ -477,7 +495,7 @@ wash_r0_sel = wash_r0 %>% select(data_row,menage_id,village, village_name, inter
                                  q20_excrement_animaux,q21_animal_malade___1,           
                                  q21_animal_malade___2,q21_animal_malade___3,           
                                  q21_animal_malade___4,q21_animal_malade___5,           
-                                 q21_animal_malade___6,eau_assainissement_hygine_comple) %>%
+                                 q21_animal_malade___6, eau_assainissement_hygine_complete) %>%
   filter(!is.na(date_enquete)) # Denominator data (i.e. people tested for esbl) for R0
 
 
@@ -500,7 +518,7 @@ car_r1 = left_join(car_r1, hh_lab_ids, by="household")
 
 
 # Check if all linked
-table(car_r1$bras, useNA= "always") # 5 can not be linked
+table(car_r1$bras, useNA= "always") # 0 can not be linked
 
 # Link lab data with hh survey ids
 length(unique(car_r1$menage_id))
@@ -525,9 +543,9 @@ wash_r1_lab$member =  gsub(".*M", "", wash_r1_lab$cs_id_individu)
 wash_r1_lab$member = as.character(as.numeric(wash_r1_lab$member))
 # Check the one's which are now NA
 table(is.na(wash_r1_lab$member))
-wash_r1_lab$cs_id_individu[is.na(wash_r1_lab$member)] # 1 missing
-wash_r1_lab$num_echantillon[is.na(wash_r1_lab$member)] # of 1 we can get them from num_echantillon
-wash_r1_lab$member[wash_r1_lab$num_echantillon=="SEA06902M2"] = "2"
+wash_r1_lab$cs_id_individu[is.na(wash_r1_lab$member)] # 0 missing
+wash_r1_lab$num_echantillon[is.na(wash_r1_lab$member)] # of 0 we can get them from num_echantillon
+#wash_r1_lab$member[wash_r1_lab$num_echantillon=="SEA06902M2"] = "2"
 table(is.na(wash_r1_lab$member))
 
 
@@ -565,7 +583,7 @@ car_r1$member =  gsub(".*-", "", car_r1$record_id)
 car_r1$member = as.character(as.numeric(car_r1$member))
 # Check the one's which are now NA
 table(is.na(car_r1$member))
-car_r1$record_id[is.na(car_r1$member)] # 16 individuals have a household member number after M
+car_r1$record_id[is.na(car_r1$member)] # 9 individuals have a household member number after M
 car_r1$member[is.na(car_r1$member)] =  gsub(".*M", "", car_r1$record_id[is.na(car_r1$member)])
 table(is.na(car_r1$member))
 
@@ -578,7 +596,7 @@ humanR1 = car_r1 %>% filter(germe_c != "salmonella")
 
 # Keep for those with two e. coli's only ESBL positive
 # First make dataset with only those with more than one e coli
-dups = humanR1$record_id[duplicated(humanR1$record_id)] # 70
+dups = humanR1$record_id[duplicated(humanR1$record_id)] # 71
 length(dups)
 dups_members=humanR1$menage_id_member[duplicated(humanR1$menage_id_member)] # 71
 
@@ -597,6 +615,7 @@ length(unique(humanR1e$record_id)) # one missing needs checking still
 length(unique(humanR1$record_id)) # all household samples are included
 table(!duplicated(humanR1e$record_id))
 
+
 # Select relevant variables from lab data
 humanR1e_sel = humanR1e %>% select(village,village_name,menage_id, intervention_text, household,menage_id_member,record_id,
                                    id_ecantillon,germe_c, date,esbl_pos)
@@ -614,7 +633,7 @@ car_r2 = left_join(car_r2, hh_lab_ids, by="household")
                                        # For ECCMID, if we want to still submit something, we may want to ignore these IDs for now
 
 # Check if all linked
-table(car_r2$bras, useNA= "always") # 8 can not be linked
+table(car_r2$bras, useNA= "always") # 0 can not be linked
 
 # Link lab data with hh survey ids
 length(unique(car_r2$menage_id))
@@ -719,13 +738,13 @@ humanR2e_sel = humanR2e %>% select(village,village_name,menage_id, intervention_
 ##########################################################################
 
 # DO A CHECK IF ALL VARIABLES CAN BE LINKED 
-not_in_dataset0 <- anti_join(car_r0, wash_r0_lab, by = "menage_id_member")# 30 can not be found back in wash_r0
-not_in_dataset1 <- anti_join(car_r1, wash_r0_lab, by = "menage_id_member")# 20 can not be found back in wash_r0
-not_in_dataset2 <- anti_join(car_r2, wash_r0_lab, by = "menage_id_member")# 28 can not be found back in wash_r0
+not_in_dataset0 <- anti_join(car_r0, wash_r0_lab, by = "menage_id_member")# 11 can not be found back in wash_r0; these are the ECC1801 which should be ECC01101 and are duplicates
+not_in_dataset1 <- anti_join(car_r1, wash_r0_lab, by = "menage_id_member")# 1 can not be found back in wash_r0
+not_in_dataset2 <- anti_join(car_r2, wash_r0_lab, by = "menage_id_member")# 0 can not be found back in wash_r0
 
-length(unique(not_in_dataset0$menage_id)) # belonging to 17 different households
-length(unique(not_in_dataset1$menage_id)) # belonging to 11 different households
-length(unique(not_in_dataset2$menage_id)) # belonging to 10 different households
+length(unique(not_in_dataset0$menage_id)) # belonging to 1 different households
+length(unique(not_in_dataset1$menage_id)) # belonging to 1 different households
+length(unique(not_in_dataset2$menage_id)) # belonging to 0 different households
 
 # export those that can not be found back
 not_in_dataset0 = not_in_dataset0 %>% select(record_id, id_ecantillon,household,menage_id,menage_id_member,member)
@@ -754,9 +773,9 @@ print(cbind(not_in_dataset2$record_id, not_in_dataset2$menage_id_member))
 # "EKE07110-03"           
 # "EKE07110-05"   
 
-not_in_dataset0 <- anti_join(car_r0, wash_r0_lab, by = "menage_id")# 7 household IDs can not be found back in wash_r0
-not_in_dataset1 <- anti_join(car_r1, wash_r0_lab, by = "menage_id")# 8 can not be found back in wash_r0
-not_in_dataset2 <- anti_join(car_r2, wash_r0_lab, by = "menage_id")# 17 can not be found back in wash_r0
+not_in_dataset0 <- anti_join(car_r0, wash_r0_lab, by = "menage_id")# 0 household IDs can not be found back in wash_r0
+not_in_dataset1 <- anti_join(car_r1, wash_r0_lab, by = "menage_id")# 0 can not be found back in wash_r0
+not_in_dataset2 <- anti_join(car_r2, wash_r0_lab, by = "menage_id")# 0 can not be found back in wash_r0
 
 # CLEAN UP AT LEAST FOR car_r0 ids to see if can be linked
 #wash_r0_ch = wash_r0_lab%>% select(data_row,menage_id, num_echantillon, cs_id_individu, menage_id_member)
@@ -773,17 +792,17 @@ not_in_dataset2 <- anti_join(car_r2, wash_r0_lab, by = "menage_id")# 17 can not 
 # Create datasets that just include the individuals that have three observations
 # Create a variable that says whether individuals was tested in following rounds or not
 
-w2 = anti_join(wash_r2_lab_de, wash_r0_lab_de, by = "menage_id_member")# 28 household IDs can not be found back in wash_r0
-w1 = anti_join(wash_r1_lab_de, wash_r0_lab_de, by = "menage_id_member")# 5 can not be found back in wash_r0
+w2 = anti_join(wash_r2_lab_de, wash_r0_lab_de, by = "menage_id_member")# 0 household IDs can not be found back in wash_r0
+w1 = anti_join(wash_r1_lab_de, wash_r0_lab_de, by = "menage_id_member")# 0 can not be found back in wash_r0
 
 #w21 = anti_join(wash_r2_lab_de, wash_r1_lab_de, by = "menage_id_member")# 134 household IDs can not be found back in wash_r1
 #w12 = anti_join(wash_r1_lab_de, wash_r2_lab_de, by = "menage_id_member")# 135 household IDs can not be found back in wash_r2
 
-e2 = anti_join(humanR1e_sel, humanR0, by = "menage_id_member")# 301 household IDs can not be found back in car_r0
-e1 = anti_join(humanR2e_sel, humanR0, by = "menage_id_member")# 245 household IDs can not be found back in car_r0
+e2 = anti_join(humanR1e_sel, humanR0, by = "menage_id_member")# 292 household IDs can not be found back in car_r0
+e1 = anti_join(humanR2e_sel, humanR0, by = "menage_id_member")# 235 household IDs can not be found back in car_r0
 
-h2 = anti_join(wash_r2_lab_de, HR0, by = "menage_id_member")# 28 household IDs can not be found back in HR0 should actually be the same as wash_r0
-h1 = anti_join(wash_r1_lab_de, HR0, by = "menage_id_member")# 19 can not be found back in HR0
+h2 = anti_join(wash_r2_lab_de, HR0, by = "menage_id_member")# 0 household IDs can not be found back in HR0 should actually be the same as wash_r0
+h1 = anti_join(wash_r1_lab_de, HR0, by = "menage_id_member")# 0 can not be found back in HR0
 
 
 ids_r1 = unique(wash_r1_lab_de$menage_id_member)
@@ -826,12 +845,12 @@ table(data_eccmid$r2_esbl_pos, useNA="always")
 table(car_r2$germe_c,car_r2$esbl_pos, useNA="always")
 
 # Further checks
-table(data_eccmid$r1_test) # 19 could not be found back in R0 so seems to have gone righ
+table(data_eccmid$r1_test) # 19 could not be found back in R0 so seems to have gone right
 table(data_eccmid$r2_test) # 28 could not be found back in R0 so seems to have gone right
 
 names(data_eccmid)
 
-data_eccmid = data_eccmid %>% select(-c(village_name.x, intervention_text.x, household, record_id,id_ecantillon,date,germe_c,ajouter)) %>%
+data_eccmid = data_eccmid %>% select(-c(village_name.x, intervention_text.x, household, id_ecantillon,date,germe_c,ajouter)) %>%
   rename(village_name = "village_name.y",
          intervention_text = "intervention_text.y") %>%
   # ADD Acquisitions and decolonisations 
@@ -857,7 +876,7 @@ sum(complete.cases(data_eccmid[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")])) 
 
 # Add household variables
 data_eccmid_hh = left_join(data_eccmid,HR0_final, by="menage_id_member", suffix=c("","")) %>% 
-  select(-c(household, record_id,id_ecantillon,germe_c,date)) %>%
+  select(-c(household,id_ecantillon,germe_c,date)) %>%
   mutate(age = as.numeric(age),
          sexe = as.character(sexe))
 sapply(data_eccmid_hh, function(x) class(x))
@@ -879,6 +898,7 @@ prop.table(table(data_eccmid$intervention_text,data_eccmid$r2_acquisition),1)
 # By age
 table(data_eccmid$agegr10,data_eccmid$r1_acquisition)
 prop.table(table(data_eccmid$agegr10,data_eccmid$r1_acquisition),1)
+
 
 
 # Decolonisations
@@ -909,17 +929,83 @@ test = abx %>% group_by(village.cluster, round, providertype) %>%
 write_xlsx(data_eccmid_hh, paste0(DirectoryDataOut, "/data_colonisation_eccmid.xlsx"))
 
 
-# Fit model
-# R2 is 3 months after the intervention
-m1 = glmer(r2_acquisition ~ intervention_text + age + sexe + nmbre_personne_menage + 
-             (1|village), family=binomial, 
-           data=data_eccmid_hh)
+#####################################################
+# ANALYSES FOR ECCMID ABSTRACT
+#####################################################
 
-summary(m1)
-coefficients <- fixef(m1)
-coef = exp(coefficients)
-ci = exp(confint(m1))
-cbind(coef,ci)
+coldata<-readxl::read_xlsx("./Data/BF/clean/data_colonisation_eccmid.xlsx")
+
+# Note that if acquisition occurs in between screening round 0 (baseline) and round 1 (at time of intervention)
+# then an acquisition cannot occur between round 1 and round 2 (3 month later) because individual will 
+# already be positive at round 1. And if already positive at round 1 individual will not be at risk 
+# of a post-intervention acquisition
+# Note that field r2_acquisition currently doesn't take into account that individuals are not 
+# at risk in round 1 
+
+# Proposed analysi 1 s -  include in analysis only if a negative swab at round one
+# i.e r1_esbl_pos =0   and a swab (whether pos or neg) at round 2 (i.e r2_esbl_pos is 1 or 0)
+#  outcome is 1 if r2_esbl_pos  
+# adjust for clustering at household level (menage_id) and include covariates for age (age), sex (sexe) and 
+# intervention (as coded in field intervention_text)
+# then as a sensitivity analysis consider only thoe with two initial negative swab
+
+coldata$include_in_analysis1<-coldata$r1_esbl_pos == 0 & (coldata$r2_esbl_pos ==1 |coldata$r2_esbl_pos ==0)
+
+coldata[ , c(4,5,6,7,12,15,16,92)]
+
+coldataforanalysis1<-coldata[coldata$include_in_analysis1==TRUE & !is.na(coldata$include_in_analysis1), c(1,2,4,5,6,7,10,13,16,17,18,19,20,21,22,23,24,93)]
+names(coldataforanalysis1)
+
+coldataforanalysis1$intervention<-ifelse(coldataforanalysis1$intervention_text=="intervention",1 , 0)
+
+
+# first with no random effects or other covariates
+logreg0<-glm(r2_esbl_pos ~ intervention , data=coldataforanalysis1,  family = binomial(link = "logit"))
+summary(logreg0)
+exp(logreg0$coefficients)
+exp(confint(logreg0)) # # Effect intervention: OR = 1.14 (CI:0.75 - 1.73)
+
+
+# then with covariates and random effects 
+logreg1<-glmer(r2_esbl_pos ~ age + sexe + intervention + (1|menage_id), data=coldataforanalysis1,  family = binomial(link = "logit"))
+summary(logreg1)
+exp(fixef(logreg1))
+exp(confint(logreg1, method="Wald"))[2:5,]  # Effect intervention: OR = 1.23 (CI:0.74 - 2.01)
+
+
+
+# now repeat but with a sensitivity analysis only taking those with first two swabs negative as at risk (as these are those we are most confident of not beng colonised)
+coldata$include_in_analysis2<-coldata$esbl_pos==0 & coldata$r1_esbl_pos == 0 & (coldata$r2_esbl_pos ==1 |coldata$r2_esbl_pos ==0)
+
+coldata[ , c(4,5,6,7,12,15,16,93)]
+
+
+coldataforanalysis2<-coldata[coldata$include_in_analysis2==TRUE & !is.na(coldata$include_in_analysis1), c(1,2,4,5,6,7,10,13,16,17,18,19,20,21,22,23,24,93)]
+coldataforanalysis2$intervention<-ifelse(coldataforanalysis2$intervention_text=="intervention",1 , 0)
+
+# first with no random effects or other covariates
+logreg0sens1<-glm(r2_esbl_pos ~ intervention , data=coldataforanalysis2,  family = binomial(link = "logit"))
+summary(logreg0sens1)
+exp(logreg0sens1$coefficients)
+exp(confint(logreg0sens1)) # # Effect intervention: OR = 0.90 (CI:0.50 - 1.62)
+
+
+logreg1sens1<-glmer(r2_esbl_pos ~ age + sexe + intervention + (1|menage_id), data=coldataforanalysis2,  family = binomial(link = "logit"))
+
+# random effects models fails with error "boundary (singular) fit: see help('isSingular')"
+
+# fixed effects with covariates
+logreg1sens1a<-glm(r2_esbl_pos ~ age + sexe + intervention , data=coldataforanalysis2,  family = binomial(link = "logit"))
+summary(logreg1sens1a)
+coef = exp(logreg1sens1a$coefficients)
+ci = exp(confint(logreg1sens1a))
+cbind(coef,ci) # Effect intervention: OR = 1.02 (CI:0.55 - 1.87)
+
+sum(complete.cases(coldata[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")])) # 892
+d = coldata %>% filter(complete.cases(coldata[, c("esbl_pos", "r1_esbl_pos", "r2_esbl_pos")]))
+length(unique(d$menage_id))
+table(d$esbl_pos)
+
 
 
 
@@ -936,7 +1022,7 @@ summary(wash_r0$nmbre_personne_menage)
 
 df_r0 = data_eccmid_hh
 # Per household, how many positive
-d = df_r0 %>% group_by(village, intervention_text, menage_id, esbl_pos) %>%
+d = df_r0 %>% group_by(village_name, intervention_text, menage_id, esbl_pos) %>%
   summarise(n = n())
 
 samples_per_hh = df_r0 %>% group_by(menage_id) %>%
@@ -968,19 +1054,32 @@ hist(as.numeric(d_pos$hh_size))
 summary(d_pos$f_pos)
 summary(d_pos$f_pos_cor)
 
-sorted_clusters <- with(d_pos, reorder(village, f_pos_cor, FUN = median))
+median = summary(d_pos$f_pos_cor)[3]
+median_i = summary(d_pos$f_pos_cor[d_pos$intervention_text=="intervention"])[3]
+median_ni = summary(d_pos$f_pos_cor[d_pos$intervention_text=="contrôle"])[3]
+median_t = data.frame(rbind(c("intervention", median_i),c("contrôle", median_ni)))
+names(median_t) = c("intervention_text", "Median")
+#sorted_clusters <- with(d_pos, reorder(village_name, f_pos_cor, FUN = median))
 
 # Plot boxplot of fraction positive per village per intervention group
-bp = ggplot(d_pos, aes(x = sorted_clusters, y = f_pos_cor, fill = village)) +
-  geom_jitter(alpha=0.5) + 
-  geom_boxplot() + 
+bp = ggplot(d_pos, aes(x = village_name, y = f_pos_cor, fill = village_name)) +
+  geom_jitter(alpha=0.5) + theme_bw() +
+  # geom_hline(yintercept=median, 
+  #            color = "red", size=2) +
+  geom_boxplot() + theme(legend.position="none",
+                         axis.text.x=element_text(size=15, angle=90),
+                         axis.title=element_text(size=16,face="bold"),
+                         axis.text=element_text(size=14,face="bold"),
+                         strip.text=element_text(size=14,face="bold")) +
+  ylim(0,1) + 
   facet_wrap(~intervention_text, scales=("free_x")) + 
-  labs(title = "Boxplot of % positive per village clusters",
+  geom_abline(data = median_t, aes(intercept = as.numeric(Median), slope = 0),lty="dashed", size=1, col="red")+ 
+  labs(title = "Boxplot of ESBL-E positive (%) per village cluster (Baseline)",
        x = "Village",
        y = "% positive")
 print(bp)
 
-d_sum = d %>% group_by(village,intervention_text) %>%
+d_sum = d %>% group_by(village_name,intervention_text) %>%
   summarise(mean = mean(f_pos_cor, na.rm=T),
             median = median(f_pos_cor,na.rm=T),
             q1 = quantile(f_pos_cor,probs=c(0.25), na.rm = T),
@@ -988,7 +1087,7 @@ d_sum = d %>% group_by(village,intervention_text) %>%
 d_sum
 
 # Plot of median fraction positive per village per intervention group
-ggplot(d_sum, aes(x = village, y = median, col = village)) +
+ggplot(d_sum, aes(x = village_name, y = median, col = village_name)) +
   geom_point(size=2) + 
   geom_errorbar(aes(ymin=q1,ymax=q3,width=0.5)) +
   facet_wrap(~intervention_text, scales=("free_x")) + 
@@ -1010,24 +1109,43 @@ dpi = ggplot(d_pos, aes(x=f_pos_cor, group=intervention_text, fill=intervention_
   geom_density(aes(f_pos, ..scaled..)) 
 dpi 
 
-ggplot(d_pos, aes(x=f_pos_cor, group=village, fill=village)) + 
-  geom_histogram() + facet_wrap(.~ village) +
-  labs(x="%positive within hh", y="number of households")
+ggplot(d_pos, aes(x=f_pos_cor, group=village_name, fill=village_name)) + 
+  geom_histogram() + facet_wrap(.~ village_name) +
+  theme_bw() +
+  theme(legend.position="none",
+        axis.text.x=element_text(size=12),
+        axis.title=element_text(size=16,face="bold"),
+        axis.text=element_text(size=12,face="bold"),
+        strip.text=element_text(size=12,face="bold")) +
+  xlim(0,1) + 
+  labs(x="ESBL-E positive (%) within household", y="number of households")
 
 
-mean <- d_pos %>% group_by(village) %>%
+mean <- d_pos %>% group_by(village_name) %>%
   summarise(mean = mean(f_pos_cor, na.rm=T),)
 
-ggplot(d_pos, aes(x=f_pos_cor, group=village, fill = village)) + 
+ggplot(d_pos, aes(x=f_pos_cor, group=village_name, fill = village_name)) + 
   geom_density(aes(f_pos_cor, ..scaled..))+
   labs(x="%positive within hh", y="Density")
 
-dp = ggplot(d_pos, aes(x=f_pos_cor, group=village, fill=village)) + 
+dp = ggplot(d_pos, aes(x=f_pos_cor, group=village_name, fill=village_name)) + 
   geom_density(aes(f_pos_cor, ..scaled..))+ 
-  facet_wrap(.~village)+ geom_vline(data=mean, aes(xintercept=mean))+
+  facet_wrap(.~village_name)+ geom_vline(data=mean, aes(xintercept=mean))+
   labs(x="%positive within hh", y="Density")
 dp
 
+# Number positive per round
+prop.table(table(data_eccmid$esbl_pos))
+prop.table(table(data_eccmid$r1_esbl_pos, useNA = "always"))
+table(data_eccmid$r2_esbl_pos)
+
+# Number of households per round
+length(unique(car_r0$household))
+length(unique(car_r1$household))
+length(unique(car_r2$household))
+
+# Number of household wash
+length(unique(wash_r0$menage_id))
 
 # Save plot
 pdf(file="./Output/Figures/prevalence_per_village.pdf", width=7, height=4)
@@ -1048,3 +1166,125 @@ dev.off()
 # missing links
 r0_notlink = car_r0[car_r0$found_in_wash==0,] %>% select(menage_id,household,village)
 write.csv(df_r0,paste0(DirectoryDataOut,"/need_checking/r0_lab_no_link.csv")) 
+
+
+
+
+###########################################################
+# AFTER RECEIVING NEW DATASETS
+###########################################################
+
+
+# Date: 15 April 2024
+
+# Descriptives for which variables to include in analyses
+table(HR0_final$esbl_pos)
+table(car_r0$germe_c, car_r0$esbl_pos)
+
+# Table 1
+
+wash_r0_table1 = table1(~ factor(intervention_text) + as.numeric(age) +
+       + factor(q2_source_princ_saison_seche) 
+       + factor(q3_source_princ_saison_pluv)
+       + factor(q4_bidon_stock)                    
+       + factor(q5a_bidon_ferme_rempli)
+       + factor(q5b_bidon_ferme_vide)
+       + factor(q5c_bidon_nettoye)
+       + factor(q6_traite_eau)
+       + factor(q7_type_inst_sanitaire)
+       + factor(q9_toilette_partagee)
+       + factor(q10_combien_partag)
+       + factor(q11_dernier_nettoyage)
+       + factor(q12_elimine_selle_enf)
+       + factor(q13_vidange_toilette)
+       + factor(q14_produit_lavag_main)
+       + factor(q15_lave_apr_defec)
+       + factor(q16_lave_apr_repas)
+       + factor(q17_animaux_menage)
+       + factor(q1_diarrhee_prevenu___2)
+       + factor(q1_diarrhee_prevenu___3)
+       + factor(q1_diarrhee_prevenu___4)          
+       + factor(q1_diarrhee_prevenu___5)
+       + factor(q1_diarrhee_prevenu___6)
+       + factor(q1_diarrhee_prevenu___7)          
+       + factor(q1_diarrhee_prevenu___8)
+       + factor(q1_diarrhee_prevenu___9)
+       + factor(q18_animaux_interieur___1)
+       + factor(q18_animaux_interieur___2)
+       + factor(q18_animaux_interieur___3)
+       + factor(q18_animaux_interieur___4)
+       + factor(q18_animaux_interieur___5)
+       + factor(q18_animaux_interieur___6)
+       + factor(q19_animaux_dehors___1)
+       + factor(q19_animaux_dehors___2)
+       + factor(q19_animaux_dehors___3)
+       + factor(q19_animaux_dehors___4)
+       + factor(q19_animaux_dehors___5)
+       + factor(q19_animaux_dehors___6)
+       + factor(q20_excrement_animaux)
+       + factor(q21_animal_malade___1)
+       + factor(q21_animal_malade___2)
+       + factor(q21_animal_malade___3)
+       + factor(q21_animal_malade___4)
+       +factor(q21_animal_malade___5)
+       + factor(q21_animal_malade___6)
+       + factor(eau_assainissement_hygine_complete)| factor(esbl_pos), data=HR0_final)
+wash_r0_table1
+
+# By cluster
+wash_r0_village = table1(~ factor(intervention_text) + as.numeric(age) +
+                          + factor(q2_source_princ_saison_seche) 
+                        + factor(q3_source_princ_saison_pluv)
+                        + factor(q4_bidon_stock)                    
+                        + factor(q5a_bidon_ferme_rempli)
+                        + factor(q5b_bidon_ferme_vide)
+                        + factor(q5c_bidon_nettoye)
+                        + factor(q6_traite_eau)
+                        + factor(q7_type_inst_sanitaire)
+                        + factor(q9_toilette_partagee)
+                        + factor(q10_combien_partag)
+                        + factor(q11_dernier_nettoyage)
+                        + factor(q12_elimine_selle_enf)
+                        + factor(q13_vidange_toilette)
+                        + factor(q14_produit_lavag_main)
+                        + factor(q15_lave_apr_defec)
+                        + factor(q16_lave_apr_repas)
+                        + factor(q17_animaux_menage)
+                        + factor(q1_diarrhee_prevenu___2)
+                        + factor(q1_diarrhee_prevenu___3)
+                        + factor(q1_diarrhee_prevenu___4)          
+                        + factor(q1_diarrhee_prevenu___5)
+                        + factor(q1_diarrhee_prevenu___6)
+                        + factor(q1_diarrhee_prevenu___7)          
+                        + factor(q1_diarrhee_prevenu___8)
+                        + factor(q1_diarrhee_prevenu___9)
+                        + factor(q18_animaux_interieur___1)
+                        + factor(q18_animaux_interieur___2)
+                        + factor(q18_animaux_interieur___3)
+                        + factor(q18_animaux_interieur___4)
+                        + factor(q18_animaux_interieur___5)
+                        + factor(q18_animaux_interieur___6)
+                        + factor(q19_animaux_dehors___1)
+                        + factor(q19_animaux_dehors___2)
+                        + factor(q19_animaux_dehors___3)
+                        + factor(q19_animaux_dehors___4)
+                        + factor(q19_animaux_dehors___5)
+                        + factor(q19_animaux_dehors___6)
+                        + factor(q20_excrement_animaux)
+                        + factor(q21_animal_malade___1)
+                        + factor(q21_animal_malade___2)
+                        + factor(q21_animal_malade___3)
+                        + factor(q21_animal_malade___4)
+                        +factor(q21_animal_malade___5)
+                        + factor(q21_animal_malade___6)
+                        + factor(eau_assainissement_hygine_complete)| factor(village_name), data=HR0_final)
+wash_r0_village
+
+t1flex(wash_r0_table1) %>% 
+  save_as_docx(path="./Output/Tables/wash_r0_table1.docx")
+
+# t1flex(wash_r0_village) %>% 
+#   save_as_docx(path="./Output/Tables/wash_r0_village.docx",
+#                page_size = officer::page_size(width = 21, height = 29.7/2.54, orient = "landscape"))
+
+

@@ -1172,21 +1172,24 @@ table(HR3_e$r3.esble)
 length(unique(HR_e_total_wide$menage_id_member))
 
 # Create acquisition variables
+# Still needs checking; don't think currently goes well
 HR_e_total_wide = HR_e_total_wide %>% mutate(
   m3.acquisition.r1 = ifelse(r1.esble=="No" & r2.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes", NA,"No")),
+                             ifelse(r0.esble=="Yes"|is.na(r2.esble), NA,"No")),
   m9.acquisition.r1 = ifelse(r1.esble=="No" & r3.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes", NA,"No")),
+                             ifelse(r0.esble=="Yes"|is.na(r3.esble), NA,"No")),
   m3.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|r1.esble=="Yes", NA,"No")),
+                             ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r2.esble), NA,"No")),
   m9.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|r1.esble=="Yes", NA,"No"))
+                             ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r3.esble), NA,"No"))
 )
 
 sapply(HR_e_total_wide%>%select(m3.acquisition.r0,m3.acquisition.r1,m9.acquisition.r0,m9.acquisition.r1),
        function(x) table(x, useNA="always"))
 
 table(HR_e_total_wide$r1.esble,HR_e_total_wide$r2.esble)
+table(HR_e_total_wide$m3.acquisition.r1,HR_e_total_wide$r2.esble, useNA="always")
+
 table(HR_e_total_wide$r1.esble,HR_e_total_wide$r3.esble)
 
 

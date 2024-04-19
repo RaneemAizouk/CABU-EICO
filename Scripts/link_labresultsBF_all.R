@@ -10,7 +10,7 @@ rm(list=ls())
 
 # load package
 pacman::p_load(readxl, writexl, lubridate, zoo, ggplot2, tidyverse, Hmisc, stringr,lme4,reshape2, 
-               openxlsx, table1, flextable, magrittr, officer)
+               openxlsx, table1, flextable, magrittr, officer, msm)
 
 # SET DIRECTORY
 DirectoryData <- "./Data/BF/Raw"
@@ -52,10 +52,6 @@ car_bf = merge(car_bf, villages, by="village")
 # See in WP6 folder "word file: Interpretation antibiogramme des isolats PORTAGE asymptomatique_ESBL_E. coliKlebsielle.docx), 
 # So I understood to use this, instead of esbltest == 1 
 # This is then interpreted as, cetriax/cefo resistant following ESBL selective medium)
-
-# Evk 20 September 2023:
-# Would be good to do a final check with Yougbare if this is correct or whether
-# we can just use all the observations in the car_r0 file (i.e. esbltest == 0 and esbltest == 1). 
 
 # ALL ROUNDS
 ####################
@@ -1177,21 +1173,21 @@ length(unique(HR_e_total_wide$menage_id_member))
 
 # Create acquisition variables
 HR_e_total_wide = HR_e_total_wide %>% mutate(
-  m3.acquisition.r0 = ifelse(r0.esble=="No" & r2.esble=="Yes", "Yes", 
+  m3.acquisition.r1 = ifelse(r1.esble=="No" & r2.esble=="Yes", "Yes", 
                              ifelse(r0.esble=="Yes", NA,"No")),
-  m9.acquisition.r0 = ifelse(r0.esble=="No" & r3.esble=="Yes", "Yes", 
+  m9.acquisition.r1 = ifelse(r1.esble=="No" & r3.esble=="Yes", "Yes", 
                              ifelse(r0.esble=="Yes", NA,"No")),
-  m3.acquisition.r1 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes", NA,"No")),
-  m9.acquisition.r1 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|r2.esble=="Yes", NA,"No"))
+  m3.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
+                             ifelse(r0.esble=="Yes"|r1.esble=="Yes", NA,"No")),
+  m9.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
+                             ifelse(r0.esble=="Yes"|r1.esble=="Yes", NA,"No"))
 )
 
 sapply(HR_e_total_wide%>%select(m3.acquisition.r0,m3.acquisition.r1,m9.acquisition.r0,m9.acquisition.r1),
        function(x) table(x, useNA="always"))
 
-table(HR_e_total_wide$r0.esble,HR_e_total_wide$r2.esble)
-table(HR_e_total_wide$r0.esble,HR_e_total_wide$r3.esble)
+table(HR_e_total_wide$r1.esble,HR_e_total_wide$r2.esble)
+table(HR_e_total_wide$r1.esble,HR_e_total_wide$r3.esble)
 
 
 # Export dataset

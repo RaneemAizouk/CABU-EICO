@@ -33,7 +33,7 @@ villages = readxl::read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
 names(villages) = c("village", "village_name","intervention_text","ajouter")
 
 # Antibiotic use data
-# abx = read.csv("./Data/BF/clean/watch_acute.csv")
+abx = read.csv("./Data/BF/clean/watch_acute.csv")
 
 
 # Add variables village and household
@@ -63,7 +63,9 @@ car_bf = car_bf %>%
                                               "SALMONELLA", "SELMO"),"salmonella",NA)),
          germe_c = ifelse(morphotyp%in%c(1, NA),germe_c, 
                           paste0(germe_c, "_", morphotyp)),
-         esbl_pos = ifelse(diametr_cetriax_or_cefota <= 22, 1, 0))
+         esbl_pos = ifelse(diametr_cetriax_or_cefota <= 22, 1, 0),
+         date = as.Date(date, format="%d/%m/%Y"),
+         date_conserv = as.Date(date, format="%d/%m/%Y")) 
 
 
 
@@ -107,6 +109,9 @@ names(car_bf)
 hh_bf = hh_bf %>% mutate(
   dob = as.Date(dob, format = "%Y-%m-%d"),
   sexe = factor(sexe, levels=c(1,2), labels=c("Male", "Female")),
+  date_enquete = as.Date(date_enquete, format="%Y-%m-%d"),
+  date_consentement = as.Date(date_consentement, format="%Y-%m-%d"),
+  date_recuperation_selle = as.Date(date_recuperation_selle, format="%Y-%m-%d"),
   age = tolower(age),
   age = as.numeric(age),
   agegr10 = cut(age, 
@@ -270,7 +275,8 @@ names(hh_bf)
 names(hh_bf) = gsub("_",".",names(hh_bf))
 hh_bf = hh_bf %>%
  rename(menage_id = "menage.id",
-        village_name = "village.name")
+        village_name = "village.name",
+        redcap_event_name = "redcap.event.name")
 
 # Select relevant WASH variables from the household survey
 ################################################################################################
@@ -278,7 +284,7 @@ hh_bf = hh_bf %>%
 # variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
 # are not 1 observation per household
 hh_bf_wash = hh_bf %>% select(data.row,menage_id,village, village_name, intervention.text,   
-                                 redcap.event.name,
+                                 redcap_event_name,
                                  date.enquete,
                                  groupe,
                                  n.householdmember, 
@@ -347,7 +353,7 @@ unique(car_bf$household[car_bf$found_in_wash==0])
 
 # Make dataset with only those household individuals that had a stool sample taken and their individual variables
 hh_bf_lab = hh_bf %>% filter(!is.na(cs.id.individu)) %>% # ensure just 1 observation per person of whom individual is esbl positive
-  select(data.row, redcap.event.name,cs.id.individu,num.echantillon, menage_id, village, age, agegr10, sexe, date.consent, date.stool.collection)
+  select(data.row, redcap_event_name,cs.id.individu,num.echantillon, menage_id, village, age, agegr10, sexe, date.consent, date.stool.collection)
   
 # Merge wash patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
 which(car_bf$record_id %in% unique(hh_bf_lab$cs.id.individu)) # Have to change the format of both to make sure matching can be done
@@ -423,7 +429,7 @@ table(car_bf$germe_c)
 # Remove ECC1801 (checked with Franck), which should be ECC01101, and are therefore duplicates so can be removed
 which(car_bf$household=="ECC1801")
 
-car_bf = car_bf %>% filter(!household=="ECC1801")
+car_bf = car_bf %>% filter(!household=="ECC1801") 
 
 
 # Create cohort 
@@ -434,6 +440,7 @@ car_bf = car_bf %>% filter(!household=="ECC1801")
 
 car_bf_r0 = car_bf %>% filter(redcap_event_name =="round_0_arm_1")
 length(unique(car_bf_r0$menage_id_member))
+hh_bf_lab_r0 = hh_bf_lab %>% filter(redcap_event_name =="round_0_arm_1")
 
 # three seperate datasets for e.coli, ecoli_2, ecoli_3 and salmonella so merge goes well
 HRe = car_bf %>% filter(germe_c == "e.coli", redcap_event_name =="round_0_arm_1")
@@ -451,34 +458,63 @@ HRe = HRe %>% filter(!duplicated(HRe$menage_id_member))
 HRe2 = HRe2 %>% filter(!duplicated(HRe2$menage_id_member))
 
 # MERGE individual hh characteristics with car_r0
-HRe_l = left_join(HRe,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"))
-HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
+HRe_l = left_join(HRe,hh_bf_lab, by= c("menage_id_member", "menage_id", "village","redcap_event_name"))
+#table(HRe_l$data.row, useNA="always")
+#HRe_l$menage_id_member[is.na(HRe_l$data.row)] # Appearantly there are a view IDs with round_0_arm_1 not present in the hh_bf_lab
+#hh_bf_lab[hh_bf_lab$menage_id_member%in% HRe_l$menage_id_member[is.na(HRe_l$data.row)],] # Appearantly there are a view IDs with round_0_arm_1 not present in the hh_bf_lab
+# but we do want to link with redcap_event_name otherwise we don't get the right date.consent, which we need for model fitting
+
+# For now use an ugly fix 
+HRe_l_nl = HRe_l %>% filter(is.na(data.row))
+HRe_l_nl = left_join(HRe_l_nl,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"), suffix = c("", ""), multiple="last")
+HRe_l_nl = HRe_l_nl %>% select(-c(member))
+HRe_l_nl = HRe_l_nl %>% mutate(
+  date.consent = NA,
+  date.stool.collection = NA,
+  redcap_event_name="round_0_arm_1") # as the stool collection date is not correct, linked to R1, not R0
+
+
+HRe_l = HRe_l %>% filter(!is.na(data.row))
+HRe_l = rbind(HRe_l, HRe_l_nl)
+
+HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"), multiple="first") # keeps first matched 
+#HRe_w = HRe_w %>% filter(!duplicated(data.row.x)&!(is.na(data.row.x)))
+names(HRe_w)
 
 table(HRe$esbl_pos)
-table(HRe_l$esbl_pos)
+table(HRe_w$esbl_pos)
 
-HRe2_l = left_join(HRe2,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
+HRe2_l = left_join(HRe2,hh_bf_lab, by= c("menage_id_member", "menage_id", "village","redcap_event_name"))
 HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"))
 
-table(HRe2_l$esbl_pos)
+table(HRe2_w$esbl_pos)
 table(HRe2$esbl_pos) 
 
-HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
+HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village","redcap_event_name"))
 HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"))
-table(HRs_l$esbl_pos)
+table(HRs_w$esbl_pos)
 table(HRs$esbl_pos)
 
 HR0_all = rbind(HRe_w,HRe2_w,HRs_w)
 table(HR0_all$esbl_pos)
 names(HR0_all)
 
+# remove the duplicate rows
+HR0_all = HR0_all %>%
+  select(-c(member.y, village_name.y, redcap_event_name.y)) %>%
+  rename(member = "member.x",
+         village_name = "village_name.x",
+         redcap_event_name = "redcap_event_name.x")
+
+
 # Now add those ones with no E.coli-E or salmonella
 testedR0 = hh_bf_lab_de$menage_id_member[hh_bf_lab_de$menage_id_member%in%c(HR0_all$menage_id_member)]
-hh_bf_lab_de_R0_no = hh_bf_lab_de %>% filter(redcap.event.name == "round_0_arm_1" & !menage_id_member%in%c(testedR0)) 
+hh_bf_lab_de_R0_no = hh_bf_lab_r0 %>% filter(redcap_event_name == "round_0_arm_1" & !menage_id_member%in%c(testedR0)) 
 hh_bf_lab_de_R0_no = left_join(hh_bf_lab_de_R0_no, hh_bf_wash, by= c("menage_id", "village"))
-hh_bf_lab_de_R0_no = hh_bf_lab_de_R0_no %>% filter(!duplicated(data.row.x))
+hh_bf_lab_de_R0_no = hh_bf_lab_de_R0_no %>% filter(!duplicated(data.row.x)) 
 
+table(is.na(hh_bf_lab_de_R0_no$menage_id_member)) # # There is one individual that has no ID member, remove
+hh_bf_lab_de_R0_no = hh_bf_lab_de_R0_no %>% filter(!is.na(menage_id_member))
 
 # Add column names so datasets of negatives and postives can be rbinded
 NOT.names <- names(HR0_all)[!names(HR0_all)%in%names(hh_bf_lab_de_R0_no)]
@@ -503,9 +539,34 @@ table(car_bf_r0$germe_c, car_bf_r0$esbl_pos) # difference of 3 comes from the du
 
 # Keep only relevant variables
 names(HR0_all)
+# Check which date to take for the analyses
+table(HR0_all$date.consent, useNA="always")
+table(HR0_all$date.stool.collection, useNA="always")
+table(HR0_all$date_conserv, useNA="always")
+table(HR0_all$date, useNA="always")
+HR0_all%>%filter(is.na(date.consent)) # it seems fairly safe to use the date variable for those which had the stool collection date missing as not with R0 in the hh dataset but now leave as NA
+d = HR0_all %>%mutate(
+  diff = date - date.consent,
+  diff_start = date.consent - min(date.consent, na.rm=T)
+)
 
-HR0_all = HR0_all %>% select(-c(redcap.event.name.x,redcap.event.name.y,
-                                village_name.y,redcap_repeat_instrument,redcap_repeat_instance,
+
+table((as.numeric(d$diff)))
+mean(d$diff,na.rm=T) # could use this to impute the date for those with an unlikely date
+
+table((as.numeric(d$diff_start))) # should not be more than 90-100 days as one collection round took 3 months.
+
+table(HR0_all$date.consent)
+#View(HR0_all %>% filter(date.consent>"2023-01-30")) # Just a few have an unlikely date of consent, this may be due to typo. 
+# So date.consent has the least number of NAs
+max(HR0_all$date, na.rm=T)
+max(HR0_all$date.stool.collection, na.rm=T)
+max(HR0_all$date.consent, na.rm=T)
+#View(HR0_all %>% filter(date.consent == "2023-12-06"))
+#View(HR0_all %>% filter(is.na(date.consent)))
+HR0_all$date[HR0_all$date.consent>"2023-03-30"]
+
+HR0_all = HR0_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
                                 check_list, id_ecantillon, morphotyp, germe, testesbl,
                                 rsultats_antibiogramme_portage_asymptomatique_salm_complete,
                                 interpretr_ampici_amoxicil,comment_ampici_amoxic,
@@ -520,7 +581,7 @@ HR0_all = HR0_all %>% select(-c(redcap.event.name.x,redcap.event.name.y,
                                 interpr_pfloxacine, comment_ciprofloxacine,
                                 interpr_ciprofloxacine, comment_pfloxacine,
                                 interpr_sulfame_trimethop, comment_sulfa_trimethop,
-                                village_name.y,redcap.event.name.x,redcap.event.name.y, groupe, bras, ajouter,
+                                groupe, bras, ajouter,
                                 found_in_hh, member, num.echantillon,cs.id.individu,
                                 autr.mesur.prev.diarrhe,
                                 q7.autr.typ.ins.sanitair,
@@ -529,16 +590,15 @@ HR0_all = HR0_all %>% select(-c(redcap.event.name.x,redcap.event.name.y,
                                 q18.autre.specifie
                                 )) %>%
   rename(data.row.hh.lab = "data.row.x",
-         data.row.hh.wash = "data.row.y",
-         village_name = "village_name.x") %>%
+         data.row.hh.wash = "data.row.y") %>%
   mutate(esbl_pos = ifelse(is.na(esbl_pos), 0, esbl_pos),
          date = as.Date(date, format = "%d/%m/%Y"),
          date_conserv = as.Date(date_conserv, format ="%d/%m/%Y"),
          intervention.text = factor(intervention.text, levels = c("contrôle", "intervention"), labels=c("control", "intervention")),
          esbl_pos = factor(esbl_pos, levels=c(0,1), labels=c("No", "Yes")),
-         r0.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
-         r0.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
-  )
+         r0.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", 1, 0),
+         r0.salm = ifelse(germe_c %in% c("salmonella"), 1, 0))
+
 #View(HR0_all %>% filter(is.na(record_id)))
 HR0_all$redcap_event_name = "round_0_arm_1"
 HR0_all = left_join(HR0_all,villages, by="village")
@@ -552,20 +612,19 @@ HR0_all = HR0_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
 
 
 # which IDs have a salmonella?
-idsalm = HR0_all$menage_id_member[HR0_all$r0.salm == "Yes"]
+idsalm = HR0_all$menage_id_member[HR0_all$r0.salm == 1]
 
 # which have at least 1 ESBL-E
-idesble = HR0_all$menage_id_member[HR0_all$r0.esble == "Yes"]
+idesble = HR0_all$menage_id_member[HR0_all$r0.esble == 1]
 
-
-table(HR0_all$r0.esble)
+table(HR0_all$r0.esble, useNA="always")
 table(HR0_all$r0.salm)
 
 # Also create a dataset with just one observation per individual
 d = HR0_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
   mutate(
-    r0.salm = ifelse(menage_id_member%in%idsalm, "Yes", "No"),
-    r0.esble = ifelse(menage_id_member %in% idesble, "Yes", "No")
+    r0.salm = ifelse(menage_id_member%in%idsalm, 1,0),
+    r0.esble = ifelse(menage_id_member %in% idesble, 1, 0)
   ) %>% 
   filter(!duplicated(menage_id_member)) 
 
@@ -583,12 +642,12 @@ HR0_e = HR0_e %>% select(-c(esbl_pos)) # as we created new variable esble
 write.csv(HR0_all, paste0(DirectoryDataOut, "./linked_final/bf_hh_stool_all_r0.csv")) 
 write.csv(HR0_e, paste0(DirectoryDataOut, "./linked_final/bf_hh_stool_esble_r0.csv")) 
 
-rm(d, hh_bf_lab_de_R0_no, HRe, HRe_l, HRe_w, HRe2,HRe2_l, HRe2_w,HRe3, HRs, HRs_l,HRs_w)
+rm(d, hh_bf_lab_de_R0_no, HRe, HRe_l, HRe_w, HRe2,HRe2_l, HRe2_w,HRe3, HRs, HRs_l,HRs_w, HRe_l_nl)
 
 # ROUND 1
 #############################################################################
 car_bf_r1 = car_bf %>% filter(redcap_event_name =="round_1_arm_1")
-hh_bf_lab_r1 = hh_bf_lab %>% filter(redcap.event.name =="round_1_arm_1")
+hh_bf_lab_r1 = hh_bf_lab %>% filter(redcap_event_name =="round_1_arm_1")
 
 length(unique(car_bf_r1$menage_id_member))
 
@@ -607,33 +666,33 @@ HRs = car_bf %>% filter(germe_c == "salmonella", redcap_event_name =="round_1_ar
 HRe = HRe %>% filter(!duplicated(HRe$menage_id_member))
 
 # MERGE indivdual hh characteristics with car_r1
-HRe_l = left_join(HRe,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"))
-HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
+HRe_l = left_join(HRe,hh_bf_lab, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
+#HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
 
 table(HRe$esbl_pos)
-table(HRe_l$esbl_pos)
+table(HRe_w$esbl_pos)
 
-HRe2_l = left_join(HRe2,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"))
+HRe2_l = left_join(HRe2,hh_bf_lab, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
 
 table(HRe2_l$esbl_pos)
-table(HRe2$esbl_pos) 
+table(HRe2_w$esbl_pos) 
 
-HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"))
+HRs_l = left_join(HRs,hh_bf_lab, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"),multiple="first")
+HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
 table(HRs_l$germe_c)
-table(HRs$germe_c)
+table(HRs_w$germe_c)
 
 HR1_all = rbind(HRe_w,HRe2_w,HRs_w)
-table(HR1_all$esbl_pos)
+table(HR1_all$esbl_pos, useNA="always")
 
 # Now add those ones with no E.coli-E or salmonella
 testedR1 = hh_bf_lab_r1$menage_id_member[hh_bf_lab_r1$menage_id_member%in%c(HR1_all$menage_id_member)]
 
-hh_bf_lab_de_R1_no = hh_bf_lab_r1 %>% filter(redcap.event.name == "round_1_arm_1" & !menage_id_member%in%c(testedR1)) 
-hh_bf_lab_de_R1_no = left_join(hh_bf_lab_de_R1_no, hh_bf_wash, by= c("menage_id", "village"))
-hh_bf_lab_de_R1_no = hh_bf_lab_de_R1_no %>% filter(!duplicated(data.row.x))
+hh_bf_lab_de_R1_no = hh_bf_lab_r1 %>% filter(redcap_event_name == "round_1_arm_1" & !menage_id_member%in%c(testedR1)) 
+hh_bf_lab_de_R1_no = left_join(hh_bf_lab_de_R1_no, hh_bf_wash, by= c("menage_id", "village"), multiple="last")
+#hh_bf_lab_de_R1_no = hh_bf_lab_de_R1_no %>% filter(!duplicated(data.row.x))
 
 
 # Add column names so datasets of negatives and postives can be rbinded
@@ -658,6 +717,27 @@ table(car_bf_r1$germe_c, car_bf_r1$esbl_pos)
 # Keep only relevant variables
 names(HR1_all)
 
+
+# Check which date to take for the analyses
+table(HR1_all$date.consent, useNA="always")
+
+HR1_all%>%filter(is.na(date.consent)) # it seems fairly safe to use the date variable for those which had the stool collection date missing as not with R0 in the hh dataset but now leave as NA
+d = HR1_all %>%mutate(
+  diff = date.enquete - date.consent,
+  diff_start = date.consent - min(date.consent, na.rm=T)
+)
+
+table((as.numeric(d$diff)))
+mean(d$diff,na.rm=T) # could use this to impute the date for those with an unlikely date
+table((as.numeric(d$diff_start))) # should not be more than 90-100 days as one collection round took 3 months.
+
+table(HR1_all$date.consent)
+table(HR1_all$date.enquete)
+
+max(HR1_all$date.consent, na.rm=T)
+min(HR1_all$date.consent, na.rm=T) # Something is not right in the hh_bf vs redcap_event_name rounds
+#View(HR1_all[HR1_all$date.consent<"2023-03-30",])
+
 HR1_all = HR1_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
                                 check_list, id_ecantillon, morphotyp, germe, testesbl,
                                 rsultats_antibiogramme_portage_asymptomatique_salm_complete,
@@ -673,8 +753,8 @@ HR1_all = HR1_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
                                 interpr_pfloxacine, comment_ciprofloxacine,
                                 interpr_ciprofloxacine, comment_pfloxacine,
                                 interpr_sulfame_trimethop, comment_sulfa_trimethop,
-                                village_name.y,redcap.event.name.x,redcap.event.name.y, groupe, bras, ajouter,
-                                found_in_hh, member, num.echantillon,cs.id.individu,
+                                village_name.y,redcap_event_name.x,redcap_event_name.y, groupe, bras, ajouter,
+                                found_in_hh, member.x,member.y, num.echantillon,cs.id.individu,
                                 autr.mesur.prev.diarrhe,
                                 q7.autr.typ.ins.sanitair,
                                 q8.autre.preciser,
@@ -689,8 +769,8 @@ HR1_all = HR1_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          date_conserv = as.Date(date_conserv, format ="%d/%m/%Y"),
          intervention.text = factor(intervention.text, levels = c("contrôle", "intervention"), labels=c("control", "intervention")),
          esbl_pos = factor(esbl_pos, levels=c(0,1), labels=c("No", "Yes")),
-         r1.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
-         r1.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
+         r1.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes",1, 0),
+         r1.salm = ifelse(germe_c %in% c("salmonella"), 1, 0)
   )
 
 HR1_all$redcap_event_name = "round_1_arm_1"
@@ -704,10 +784,10 @@ HR1_all = HR1_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
 
 
 # which IDs have a salmonella?
-idsalm = HR1_all$menage_id_member[HR1_all$r1.salm == "Yes"]
+idsalm = HR1_all$menage_id_member[HR1_all$r1.salm == 1]
 
 # which have at least 1 ESBL-E
-idesble = HR1_all$menage_id_member[HR1_all$r1.esble == "Yes"]
+idesble = HR1_all$menage_id_member[HR1_all$r1.esble == 1]
 
 table(HR1_all$r1.esble)
 table(HR1_all$r1.salm)
@@ -715,8 +795,8 @@ table(HR1_all$r1.salm)
 # Also create a dataset with just one observation per individual
 d = HR1_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
   mutate(
-    r1.salm = ifelse(menage_id_member%in%idsalm, "Yes", "No"),
-    r1.esble = ifelse(menage_id_member %in% idesble, "Yes", "No")
+    r1.salm = ifelse(menage_id_member%in%idsalm, 1,0),
+    r1.esble = ifelse(menage_id_member %in% idesble, 1,0)
   ) %>% 
   filter(!duplicated(menage_id_member)) 
 
@@ -739,7 +819,7 @@ rm(d, hh_bf_lab_de_R1_no, HRe, HRe_l, HRe_w, HRe2,HRe2_l, HRe2_w,HRe3, HRs, HRs_
 # ROUND 2
 ##############################################################################################
 car_bf_r2 = car_bf %>% filter(redcap_event_name =="round_2_arm_1")
-hh_bf_lab_r2 = hh_bf_lab %>% filter(redcap.event.name =="round_2_arm_1")
+hh_bf_lab_r2 = hh_bf_lab %>% filter(redcap_event_name =="round_2_arm_1")
 
 length(unique(car_bf_r2$menage_id_member))
 
@@ -758,22 +838,22 @@ HRs = car_bf %>% filter(germe_c == "salmonella", redcap_event_name =="round_2_ar
 HRe = HRe %>% filter(!duplicated(HRe$menage_id_member))
 
 # MERGE indivdual hh characteristics with car_r1
-HRe_l = left_join(HRe,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"))
-HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
+HRe_l = left_join(HRe,hh_bf_lab, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
+#HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
 
 table(HRe$esbl_pos)
-table(HRe_l$esbl_pos)
+table(HRe_w$esbl_pos)
 
-HRe2_l = left_join(HRe2,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"))
+HRe2_l = left_join(HRe2,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
 
-table(HRe2_l$esbl_pos)
+table(HRe2_w$esbl_pos)
 table(HRe2$esbl_pos) 
 
-HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"))
-table(HRs_l$germe_c)
+HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"),multiple="last")
+table(HRs_w$germe_c)
 table(HRs$germe_c)
 
 HR2_all = rbind(HRe_w,HRe2_w,HRs_w)
@@ -782,9 +862,9 @@ table(HR2_all$esbl_pos)
 # Now add those ones with no E.coli-E or salmonella
 testedR2 = hh_bf_lab_r2$menage_id_member[hh_bf_lab_r2$menage_id_member%in%c(HR2_all$menage_id_member)]
 
-hh_bf_lab_de_R2_no = hh_bf_lab_r2 %>% filter(redcap.event.name == "round_2_arm_1" & !menage_id_member%in%c(testedR2)) 
-hh_bf_lab_de_R2_no = left_join(hh_bf_lab_de_R2_no, hh_bf_wash, by= c("menage_id", "village"))
-hh_bf_lab_de_R2_no = hh_bf_lab_de_R2_no %>% filter(!duplicated(data.row.x))
+hh_bf_lab_de_R2_no = hh_bf_lab_r2 %>% filter(redcap_event_name == "round_2_arm_1" & !menage_id_member%in%c(testedR2)) 
+hh_bf_lab_de_R2_no = left_join(hh_bf_lab_de_R2_no, hh_bf_wash, by= c("menage_id", "village"), multiple="last")
+#hh_bf_lab_de_R2_no = hh_bf_lab_de_R2_no %>% filter(!duplicated(data.row.x))
 
 
 # Add column names so datasets of negatives and postives can be rbinded
@@ -824,8 +904,8 @@ HR2_all = HR2_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
                                 interpr_pfloxacine, comment_ciprofloxacine,
                                 interpr_ciprofloxacine, comment_pfloxacine,
                                 interpr_sulfame_trimethop, comment_sulfa_trimethop,
-                                village_name.y,redcap.event.name.x,redcap.event.name.y, groupe, bras, ajouter,
-                                found_in_hh, member, num.echantillon,cs.id.individu,
+                                village_name.y, groupe, bras, ajouter,redcap_event_name.x,redcap_event_name.y,
+                                found_in_hh, member.x,member.y, num.echantillon,cs.id.individu,
                                 autr.mesur.prev.diarrhe,
                                 q7.autr.typ.ins.sanitair,
                                 q8.autre.preciser,
@@ -840,8 +920,8 @@ HR2_all = HR2_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          date_conserv = as.Date(date_conserv, format ="%d/%m/%Y"),
          intervention.text = factor(intervention.text, levels = c("contrôle", "intervention"), labels=c("control", "intervention")),
          esbl_pos = factor(esbl_pos, levels=c(0,1), labels=c("No", "Yes")),
-         r2.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
-         r2.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
+         r2.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes",1,0),
+         r2.salm = ifelse(germe_c %in% c("salmonella"), 1,0)
   )
 HR2_all$redcap_event_name = "round_2_arm_1"
 HR2_all = left_join(HR2_all,villages, by="village")
@@ -853,10 +933,10 @@ HR2_all = HR2_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
   select(-c(record_id))
 
 # which IDs have a salmonella?
-idsalm = HR2_all$menage_id_member[HR2_all$r2.salm == "Yes"]
+idsalm = HR2_all$menage_id_member[HR2_all$r2.salm == 1]
 
 # which have at least 1 ESBL-E
-idesble = HR2_all$menage_id_member[HR2_all$r2.esble == "Yes"]
+idesble = HR2_all$menage_id_member[HR2_all$r2.esble == 1]
 
 table(HR2_all$r2.esble)
 table(HR2_all$r2.salm)
@@ -864,8 +944,8 @@ table(HR2_all$r2.salm)
 # Also create a dataset with just one observation per individual
 d = HR2_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
   mutate(
-    r2.salm = ifelse(menage_id_member%in%idsalm, "Yes", "No"),
-    r2.esble = ifelse(menage_id_member %in% idesble, "Yes", "No")
+    r2.salm = ifelse(menage_id_member%in%idsalm, 1,0),
+    r2.esble = ifelse(menage_id_member %in% idesble, 1,0)
   ) %>% 
   filter(!duplicated(menage_id_member)) 
 
@@ -889,7 +969,7 @@ rm(d, hh_bf_lab_de_R2_no, HRe, HRe_l, HRe_w, HRe2,HRe2_l, HRe2_w,HRe3, HRs, HRs_
 # ROUND 3
 #############################################################################
 car_bf_r3 = car_bf %>% filter(redcap_event_name =="round_3_arm_1")
-hh_bf_lab_r3 = hh_bf_lab %>% filter(redcap.event.name =="round_3_arm_1")
+hh_bf_lab_r3 = hh_bf_lab %>% filter(redcap_event_name =="round_3_arm_1")
 
 length(unique(car_bf_r3$menage_id_member))
 
@@ -908,21 +988,21 @@ HRs = car_bf %>% filter(germe_c == "salmonella", redcap_event_name =="round_3_ar
 HRe = HRe %>% filter(!duplicated(HRe$menage_id_member))
 
 # MERGE indivdual hh characteristics with car_r1
-HRe_l = left_join(HRe,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"))
-HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
+HRe_l = left_join(HRe,hh_bf_lab, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRe_w = left_join(HRe_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
+#HRe_w = HRe_w %>% filter(!duplicated(data.row.x))
 
 table(HRe$esbl_pos)
-table(HRe_l$esbl_pos)
+table(HRe_w$esbl_pos)
 
-HRe2_l = left_join(HRe2,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"))
+HRe2_l = left_join(HRe2,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village", "redcap_event_name"), multiple="first")
+HRe2_w = left_join(HRe2_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
 
-table(HRe2_l$esbl_pos)
+table(HRe2_w$esbl_pos)
 table(HRe2$esbl_pos) 
 
-HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village"),  suffix = c("", ""))
-HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"))
+HRs_l = left_join(HRs,hh_bf_lab_de, by= c("menage_id_member", "menage_id", "village","redcap_event_name"), multiple="first")
+HRs_w = left_join(HRs_l,hh_bf_wash, by= c("menage_id", "village"), multiple="last")
 table(HRs_l$germe_c)
 table(HRs$germe_c)
 
@@ -932,9 +1012,9 @@ table(HR3_all$esbl_pos)
 # Now add those ones with no E.coli-E or salmonella
 testedR3 = hh_bf_lab_r3$menage_id_member[hh_bf_lab_r3$menage_id_member%in%c(HR3_all$menage_id_member)]
 
-hh_bf_lab_de_R3_no = hh_bf_lab_r3 %>% filter(redcap.event.name == "round_3_arm_1" & !menage_id_member%in%c(testedR3)) 
-hh_bf_lab_de_R3_no = left_join(hh_bf_lab_de_R3_no, hh_bf_wash, by= c("menage_id", "village"))
-hh_bf_lab_de_R3_no = hh_bf_lab_de_R3_no %>% filter(!duplicated(data.row.x))
+hh_bf_lab_de_R3_no = hh_bf_lab_r3 %>% filter(redcap_event_name == "round_3_arm_1" & !menage_id_member%in%c(testedR3)) 
+hh_bf_lab_de_R3_no = left_join(hh_bf_lab_de_R3_no, hh_bf_wash, by= c("menage_id", "village"), multiple="last")
+#hh_bf_lab_de_R3_no = hh_bf_lab_de_R3_no %>% filter(!duplicated(data.row.x))
 
 
 # Add column names so datasets of negatives and postives can be rbinded
@@ -974,8 +1054,8 @@ HR3_all = HR3_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
                                 interpr_pfloxacine, comment_ciprofloxacine,
                                 interpr_ciprofloxacine, comment_pfloxacine,
                                 interpr_sulfame_trimethop, comment_sulfa_trimethop,
-                                village_name.y,redcap.event.name.x,redcap.event.name.y, groupe, bras, ajouter,
-                                found_in_hh, member, num.echantillon,cs.id.individu,
+                                village_name.y, groupe, bras, ajouter,redcap_event_name.x,redcap_event_name.y,
+                                found_in_hh, member.x,member.y, num.echantillon,cs.id.individu,
                                 autr.mesur.prev.diarrhe,
                                 q7.autr.typ.ins.sanitair,
                                 q8.autre.preciser,
@@ -990,8 +1070,8 @@ HR3_all = HR3_all %>% select(-c(redcap_repeat_instrument,redcap_repeat_instance,
          date_conserv = as.Date(date_conserv, format ="%d/%m/%Y"),
          intervention.text = factor(intervention.text, levels = c("contrôle", "intervention"), labels=c("control", "intervention")),
          esbl_pos = factor(esbl_pos, levels=c(0,1), labels=c("No", "Yes")),
-         r3.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", "Yes", "No"),
-         r3.salm = ifelse(germe_c %in% c("salmonella"), "Yes", "No")
+         r3.esble = ifelse(germe_c %in% c("e.coli","e.coli_2","e.coli_3") & esbl_pos == "Yes", 1,0),
+         r3.salm = ifelse(germe_c %in% c("salmonella"), 1, 0)
   ) 
 HR3_all$redcap_event_name = "round_3_arm_1"
 HR3_all = left_join(HR3_all,villages, by="village")
@@ -1003,10 +1083,10 @@ HR3_all = HR3_all %>% select(-c(village_name.x,intervention_text.x, ajouter))%>%
   select(-c(record_id))
 
 # which IDs have a salmonella?
-idsalm = HR3_all$menage_id_member[HR3_all$r3.salm == "Yes"]
+idsalm = HR3_all$menage_id_member[HR3_all$r3.salm == 1]
 
 # which have at least 1 ESBL-E
-idesble = HR3_all$menage_id_member[HR3_all$r3.esble == "Yes"]
+idesble = HR3_all$menage_id_member[HR3_all$r3.esble == 1]
 
 table(HR3_all$r3.esble)
 table(HR3_all$r3.salm)
@@ -1014,8 +1094,8 @@ table(HR3_all$r3.salm)
 # Also create a dataset with just one observation per individual
 d = HR3_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
   mutate(
-    r3.salm = ifelse(menage_id_member%in%idsalm, "Yes", "No"),
-    r3.esble = ifelse(menage_id_member %in% idesble, "Yes", "No")
+    r3.salm = ifelse(menage_id_member%in%idsalm, 1, 0),
+    r3.esble = ifelse(menage_id_member %in% idesble, 1,0)
   ) %>% 
   filter(!duplicated(menage_id_member)) 
 
@@ -1173,24 +1253,24 @@ length(unique(HR_e_total_wide$menage_id_member))
 
 # Create acquisition variables
 # Still needs checking; don't think currently goes well
-HR_e_total_wide = HR_e_total_wide %>% mutate(
-  m3.acquisition.r1 = ifelse(r1.esble=="No" & r2.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|is.na(r2.esble), NA,"No")),
-  m9.acquisition.r1 = ifelse(r1.esble=="No" & r3.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|is.na(r3.esble), NA,"No")),
-  m3.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r2.esble), NA,"No")),
-  m9.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
-                             ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r3.esble), NA,"No"))
-)
+# HR_e_total_wide = HR_e_total_wide %>% mutate(
+#   m3.acquisition.r1 = ifelse(r1.esble=="No" & r2.esble=="Yes", "Yes", 
+#                              ifelse(r0.esble=="Yes"|is.na(r2.esble), NA,"No")),
+#   m9.acquisition.r1 = ifelse(r1.esble=="No" & r3.esble=="Yes", "Yes", 
+#                              ifelse(r0.esble=="Yes"|is.na(r3.esble), NA,"No")),
+#   m3.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
+#                              ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r2.esble), NA,"No")),
+#   m9.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
+#                              ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r3.esble), NA,"No"))
+# )
 
-sapply(HR_e_total_wide%>%select(m3.acquisition.r0,m3.acquisition.r1,m9.acquisition.r0,m9.acquisition.r1),
-       function(x) table(x, useNA="always"))
-
-table(HR_e_total_wide$r1.esble,HR_e_total_wide$r2.esble)
-table(HR_e_total_wide$m3.acquisition.r1,HR_e_total_wide$r2.esble, useNA="always")
-
-table(HR_e_total_wide$r1.esble,HR_e_total_wide$r3.esble)
+# sapply(HR_e_total_wide%>%select(m3.acquisition.r0,m3.acquisition.r1,m9.acquisition.r0,m9.acquisition.r1),
+#        function(x) table(x, useNA="always"))
+# 
+# table(HR_e_total_wide$r1.esble,HR_e_total_wide$r2.esble)
+# table(HR_e_total_wide$m3.acquisition.r1,HR_e_total_wide$r2.esble, useNA="always")
+# 
+# table(HR_e_total_wide$r1.esble,HR_e_total_wide$r3.esble)
 
 
 # Export dataset

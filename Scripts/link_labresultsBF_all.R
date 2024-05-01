@@ -621,7 +621,7 @@ table(HR0_all$r0.esble, useNA="always")
 table(HR0_all$r0.salm)
 
 # Also create a dataset with just one observation per individual
-d = HR0_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
+d = HR0_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3","salmonella")) %>% 
   mutate(
     r0.salm = ifelse(menage_id_member%in%idsalm, 1,0),
     r0.esble = ifelse(menage_id_member %in% idesble, 1, 0)
@@ -793,7 +793,7 @@ table(HR1_all$r1.esble)
 table(HR1_all$r1.salm)
 
 # Also create a dataset with just one observation per individual
-d = HR1_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
+d = HR1_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3", "salmonella")) %>% 
   mutate(
     r1.salm = ifelse(menage_id_member%in%idsalm, 1,0),
     r1.esble = ifelse(menage_id_member %in% idesble, 1,0)
@@ -942,7 +942,7 @@ table(HR2_all$r2.esble)
 table(HR2_all$r2.salm)
 
 # Also create a dataset with just one observation per individual
-d = HR2_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
+d = HR2_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3", "salmonella")) %>% 
   mutate(
     r2.salm = ifelse(menage_id_member%in%idsalm, 1,0),
     r2.esble = ifelse(menage_id_member %in% idesble, 1,0)
@@ -1092,7 +1092,7 @@ table(HR3_all$r3.esble)
 table(HR3_all$r3.salm)
 
 # Also create a dataset with just one observation per individual
-d = HR3_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3")) %>% 
+d = HR3_all %>% filter(is.na(germe_c) | germe_c %in% c("e.coli","e.coli_2","e.coli_3", "salmonella")) %>% 
   mutate(
     r3.salm = ifelse(menage_id_member%in%idsalm, 1, 0),
     r3.esble = ifelse(menage_id_member %in% idesble, 1,0)
@@ -1251,28 +1251,6 @@ table(HR3_e$r3.esble)
 
 length(unique(HR_e_total_wide$menage_id_member))
 
-# Create acquisition variables
-# Still needs checking; don't think currently goes well
-# HR_e_total_wide = HR_e_total_wide %>% mutate(
-#   m3.acquisition.r1 = ifelse(r1.esble=="No" & r2.esble=="Yes", "Yes", 
-#                              ifelse(r0.esble=="Yes"|is.na(r2.esble), NA,"No")),
-#   m9.acquisition.r1 = ifelse(r1.esble=="No" & r3.esble=="Yes", "Yes", 
-#                              ifelse(r0.esble=="Yes"|is.na(r3.esble), NA,"No")),
-#   m3.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r2.esble=="Yes", "Yes", 
-#                              ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r2.esble), NA,"No")),
-#   m9.acquisition.r0 = ifelse(r0.esble=="No" & r1.esble=="No" & r3.esble=="Yes", "Yes", 
-#                              ifelse(r0.esble=="Yes"|r1.esble=="Yes"|is.na(r3.esble), NA,"No"))
-# )
-
-# sapply(HR_e_total_wide%>%select(m3.acquisition.r0,m3.acquisition.r1,m9.acquisition.r0,m9.acquisition.r1),
-#        function(x) table(x, useNA="always"))
-# 
-# table(HR_e_total_wide$r1.esble,HR_e_total_wide$r2.esble)
-# table(HR_e_total_wide$m3.acquisition.r1,HR_e_total_wide$r2.esble, useNA="always")
-# 
-# table(HR_e_total_wide$r1.esble,HR_e_total_wide$r3.esble)
-
-
 # Export dataset
 write.csv(HR_e_total_wide, paste0(DirectoryDataOut, "./linked_final/bf_hh_stool_esble_r0123_wide.csv")) 
 
@@ -1283,85 +1261,9 @@ write.csv(HR_e_total_wide, paste0(DirectoryDataOut, "./linked_final/bf_hh_stool_
 
 #################################################################################
 # Number of individuals we have complete records of
-sum(complete.cases(HR_e_total_wide[, c("r0.esble", "r1.esble", "r2.esble", "r3.esble")])) # 763 individuals
+sum(complete.cases(HR_e_total_wide[, c("r0.esble", "r1.esble", "r2.esble", "r3.esble")])) # 803 individuals
 
 
-
-
-###########################################################
-# DESCRIPTIVE TABLE 1
-###########################################################
-
-
-# Date: 15 April 2024
-
-# Descriptives for which variables to include in analyses
-table(HR0_e$r0.esble)
-
-# Table 1
-sapply(HR0_e, function(x) table(x))
-sapply(HR0_e, function(x) class(x))
-
-# trial
-wash_r0_table1 = table1(~ intervention.text + age +
-                          n.householdmember +
-                          n.child.0to5 +
-                          n.households.concession +
-                          q1.diar.prev.water.pot.covered +
-                          q1.diar.prev.no.finger.in.waterglass +  
-                          q1.diar.prev.utensil.to.take.water.from.pot + 
-                          q1.diar.prev.cover.food +
-                          q1.diar.prev.boil.water + 
-                          q1.diar.prev.filter.water + 
-                          q1.diar.prev.other+q1.diar.prev.cant.be.avoided + 
-                          q1.diar.prev.dont.know + 
-                          q2.main.water.source.dry + 
-                          q3.main.water.source.rainy + 
-                          q4.cans.storage.water + 
-                          q5a.cans.storage.water.closed.when.filled +
-                          q5b.cans.storage.water.closed.wen.empty + 
-                          q5c.cans.cleaned.before.reuse +
-                          q6.treatment.water + 
-                          q7.principle.defication + 
-                          q8.other.defecation.flush.toiled.septic + 
-                          q8.other.defecation.pit.latrine.ventilation + 
-                          q8.other.defecation.pit.latrine.slab + 
-                          q8.other.defecation.pit.latrine.no.slab +
-                          q8.other.defecation.open.defecation + 
-                          q8.other.defecation.other +                                
-                          q8.other.defecation.none + 
-                          q9.shared.toilet + 
-                          q10.n.shared.toilet +
-                          q11.toilet.last.cleaned + 
-                          q12.disposal.child.stool + 
-                          q13.disposal.latrine.pit +
-                          q14.handwashing.product+ 
-                          q15.handwashing.defecation + 
-                          q16.handwashing.meals +  
-                          q17.animals.around.household + 
-                          q18.animal.inside.cow +  
-                          q18.animal.inside.sheep.goat + 
-                          q18.animal.inside.pig + 
-                          q18.animal.inside.donkey.horse + 
-                          q18.animal.inside.chicken.goose.duck +  
-                          q18.animal.inside.other +  
-                          q19.animal.inside.cow + q19.animal.inside.sheep.goat +
-                          q19.animal.inside.pig +
-                          q19.animal.inside.donkey.horse +
-                          q19.animal.inside.chicken.goose.duck + 
-                          q19.animal.inside.other +   
-                          q20.animal.excrement.floor +    
-                          q21.when.animal.ill.treatment.with.vet + 
-                          q21.when.animal.ill.treatment.without.vet +
-                          q21.when.animal.ill.bucher +
-                          q21.when.animal.ill.eat.meat.at.home +     
-                          q21.when.animal.ill.burie.dispose +
-                          q21.when.animal.ill.autre +     
-                          eau.assainissement.hygine.complete| factor(r0.esble), data=HR0_e)
-wash_r0_table1
-
-t1flex(wash_r0_table1) %>% 
-  save_as_docx(path="./Output/Tables/wash_r0_table1.docx")
 
 
 

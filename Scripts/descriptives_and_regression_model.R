@@ -663,7 +663,8 @@ ma2tgam = gamm(acquisition ~ age + sexe + intervention.start +
               factor(time),
               random=list(village_name=~1, menage_id_member=~1), 
               family=binomial(link = "logit"), data=d)
-
+summary(ma2tgam$gam)
+exp(coef(ma2tgam$gam))
 # Without seasonality and different effect at time 2 and 3 by fitting interaction term with time gives error; with days3 not
 # mas2inter_gam = gamm(acquisition ~ age + sexe + intervention.start*factor(time) + 
 #                       s(as.numeric(month), bs="cc"),
@@ -1052,7 +1053,7 @@ predict_values <- function(model, newdata) {
 }
 
 # Set the number of bootstrap samples
-num_bootstraps <- 100
+num_bootstraps <- 500
 
 # Initialize a vector to store predicted values
 predicted_probabilities <- matrix(NA, nrow = num_bootstraps, ncol = 6)

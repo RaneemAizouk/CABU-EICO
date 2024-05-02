@@ -1,84 +1,42 @@
-#####################################################
-# DESCRIPTIVES AND RANDOM-EFFECTS MODEL
-#####################################################
-# This code is cleaning the data and linking the different datasets
+################################################################
+# DESCRIPTIVES; RANDOM-EFFECTS MODEL and FREQUENTIST MSM MODEL
+################################################################
 
-# 18 April 2024
+# 20 April 2024
 # Author: Esther van Kleef
 
 rm(list=ls())
 
+# Load functions
+source("./Scripts/functions/multiplot.R")
+
 # load package
 pacman::p_load(readxl, writexl, lubridate, zoo, ggplot2, tidyverse, Hmisc, stringr,lme4,reshape2, 
                openxlsx, table1, flextable, magrittr, officer, summarytools, msm,
-               survey)
+               survey,tsModel, mgcv)
 
 
+# Load datasets
+
+# ALL INDIVIDUALS - Wide format
 df = read.csv("./Data/BF/clean/linked_final/bf_hh_stool_esble_r0123_wide.csv")
+length(unique(df$menage_id_member)) # 1236
+
+# ALL INDIVIDUALS - long format
 dfl = read.csv("./Data/BF/clean/linked_final/bf_hh_stool_esble_r0123.csv")
+length(unique(dfl$menage_id_member)) # 1237
 
-df0 = df %>% filter(!is.na(r0.esble))
-dfc = df %>% filter(complete.cases(r1.esble, r2.esble, r3.esble)) # 775 complete cases; however, later
-# becomes clear there are individuals with unlikely collection dates. 
+# SELECTED INDIVIDUALS WITH FOUR OBSERVATIONS - long format
+load("./Data/BF/clean/use_in_analyses/bf_esbl0123_long_completecases.rda")
+length(unique(dfls0$menage_id_member)) # 785
 
-# Antibiotic use
-abx = read.csv("./Data/BF/clean/watch_acute.csv")
-vabx = read.csv("./Data/BF/Raw/village_abx_vs_hh.csv", sep=";") %>% select(village.cluster,village_name)
-# Two clusters did not have a pharmacy so no abxuse
-abx = left_join(abx,vabx)
-abxn = abx %>% filter(site =="Nanoro")
-#############################################################
-# PREAMBLE
-#############################################################
+# SELECTED INDIVIDUALS WITH FOUR OBSERVATIONS - wide format
+load("./Data/BF/clean/use_in_analyses/bf_esbl_wide_completecases.rda") # 785 individuals
+dfc = df[complete.cases(df[, c("r0.esble", "r1.esble", "r2.esble", "r3.esble")]),] # 803 individuals; Difference between dfa and dfc comes from 
+# those with a missing date of consent. They are filtered out in the dfa dataset, as that one is the same as the data in long format, where only 
+# those with a date of consent present were included (as otherwise the time since intervention could not be calculated for the msm model)
 
-########################
-# ABX USE
-########################
-nsurveys_by_providertype_by_village <- abxn %>%
-  group_by(village_name, providertype, round) %>%
-  summarise(n_surveys = n(), hcu = mean(hcu))
-nsurveys_by_providertype_by_village
-
-pop_by_village = abxn %>% select(village_name,pop_villagecluster) %>%
-  filter(!duplicated(village_name))
-
-poststratificationweight <- merge(nsurveys_by_providertype_by_village, pop_by_village, by = "village_name")
-poststratificationweight$poststratweight <- (poststratificationweight$pop_villagecluster*poststratificationweight$hcu)/poststratificationweight$n_surveys
-
-poststratificationweight_village = poststratificationweight %>% group_by(village_name,round)%>%
-  summarise(weights = sum(poststratweight))
-
-abxn = left_join(abxn, poststratificationweight_village, by=c("village_name", "round"))
-
-# proportion estimates by village and pre/post
-surveydesign <- svydesign(id = ~village_name, data = abxn, nest = TRUE)
-watchclusterprop <- svyby(~watch, by = ~village_name + round, design = surveydesign, FUN = svymean, na.rm = TRUE)
-
-poststratweightedsurveydesign <- svydesign(id = ~village_name, weights = ~weights, data = abxn, nest = TRUE)
-
-
-poststratweightedwatchprop <- svyby(~watch, by = ~village_name + round, design = poststratweightedsurveydesign, FUN = svymean, na.rm = TRUE)
-poststratweightedabxprop <- svyby(~antibiotic, by = ~village_name + round, design = poststratweightedsurveydesign, FUN = svymean, na.rm = TRUE)
-
-abxn_vw = left_join(poststratweightedwatchprop%>%select(-c(se)),
-                    poststratweightedabxprop %>% select(-c(se)))
-abxn_vw0 = abxn_vw %>% filter(round=="baseline")
-
-rm(nsurveys_by_providertype_by_village, pop_by_village,poststratweightedsurveydesign,
-   poststratificationweight_village, poststratweightedabxprop,poststratweightedwatchprop,
-   poststratificationweight, watchclusterprop,surveydesign, abxn,abxn_vw,abx,vabx)
-
-# link with dataframe
-dfl = left_join(dfl, abxn_vw0, by="village_name", multiple="first")
-df = left_join(df, abxn_vw0, by="village_name", multiple="first")
-
-###############################################################
-# DATASET FOR MSM MODEL
-###############################################################
-
-# Not all individuals have a stool collection date (i.e. those with no ESBL)
-# However, using the consent date for the ones with 
-# Check dates
+# ADD TIME VARIABLE TO FULL DATASET
 dfl = dfl %>% mutate(
   date = as.Date(date, format="%Y-%m-%d"),
   date.stool.collection = as.Date(date.stool.collection, format="%Y-%m-%d"),
@@ -90,237 +48,88 @@ dfl = dfl %>% mutate(
   date.use = ifelse(is.na(as.character(date.stool.collection)), 
                     as.character(date.consent),as.character(date.stool.collection)), # This replaced the empty dates with consent date as proxy
   date.use = as.Date(date.use, format = "%Y-%m-%d"),
+  month = format(date.use,"%m"),
   date.check.use = date - date.use,
   time = ifelse(redcap_event_name =="round_0_arm_1", 0,
                 ifelse(redcap_event_name == "round_1_arm_1", 1,
-                       ifelse(redcap_event_name == "round_2_arm_1", 2,3))))
+                       ifelse(redcap_event_name == "round_2_arm_1", 2,3))),
+  rainy = ifelse(month%in%c("06","07","08","09"),"yes", "no"))
 
 table(dfl$date.use, useNA="always")
 dfl$date.use[is.na(dfl$date.use)] = dfl$date[is.na(dfl$date.use)] 
 
-ggplot(dfl, aes(x=date.check.collect, group=redcap_event_name)) + geom_histogram() +
-  facet_wrap(~ redcap_event_name)
 
-ggplot(dfl, aes(x=date.check.use, group=redcap_event_name)) + geom_histogram() +
-  facet_wrap(~ redcap_event_name)
-
-table(dfl$date.check.use, useNA="always") # Date variable can not be used for the time, as has any NAs 
-
-# We can make a minimum date per round so to ensure we only include those with a correct date per round
-r0min = min(dfl$date.use[dfl$redcap_event_name=="round_0_arm_1"], na.rm=T) # 
-r1min = min(dfl$date.use[dfl$redcap_event_name=="round_1_arm_1"], na.rm=T) # For round 1 not correct as same as round 0
-# Should be R0+~90 days
-r1min = r0min+90
-r2min = min(dfl$date.use[dfl$redcap_event_name=="round_2_arm_1"], na.rm=T)
-r3min = min(dfl$date.use[dfl$redcap_event_name=="round_3_arm_1"], na.rm=T)
-
-
-# START CREATING DATASET BY SELECTING COMPLETE CASES + CASES WITH CORRECT STOOL.COLLECTION/CONSENT.DATE
-##############################################################
-dfls = dfl %>% filter(time!=0) %>%
-  mutate(
-  rc = ifelse(time==1 & date.use>=r1min| 
-                time==2 & date.use>=r2min| 
-                time==3 & date.use>=r3min, 1,0)
-  )
-table(dfls$rc, useNA="always")
-
-dfls = dfls %>% filter(rc!=0) %>% select(-c(rc))
-
-# Which are the individuals with observation in round 1, 2, and 3
-complete.cases.id = dfls %>% group_by(menage_id_member) %>%
-  summarise(nround = length(menage_id_member)) %>% 
-  filter(as.numeric(nround)==3)
-complete.cases.id=unique(complete.cases.id$menage_id_member)
-
-data.frame(table(dfls$menage_id_member[dfls$menage_id_member%in%complete.cases.id]))
-
-dfls = dfls %>% filter(menage_id_member %in% complete.cases.id)
-
-d = dfl %>% filter(time==0) %>% group_by(menage_id_member) %>%
-  summarise(start0 = min(date.use))
-
-# Create start when round 1 is taken as baseline
-d1 = dfls %>% filter(time!=0) %>% group_by(menage_id_member) %>%
-  summarise(start1 = min(date.use))
-
-dfls = left_join(dfls,d, by="menage_id_member")
-dfls = left_join(dfls,d1, by="menage_id_member")
-
-# Create a variable that calculates the number of days between the collection date and first round
-dfls$time.start0 =  dfls$date.use - dfls$start0
-dfls$time.start1 =  dfls$date.use - dfls$start1
-
-dfls = dfls[order(dfls$menage_id_member, dfls$time),]
-
-
-ggplot(dfls, aes(x=time.start1, group=redcap_event_name)) + geom_histogram() +
-  facet_wrap(~ redcap_event_name)
-
-# remove those with wrong dates
-r2w = dfls[which(dfls$redcap_event_name=="round_2_arm_1" & as.numeric(dfls$time.start1)==0),]
-r1w = dfls[which(dfls$redcap_event_name=="round_1_arm_1" & dfls$start1<"2023-01-01"),]
-
-dfls = dfls[-c(which(dfls$redcap_event_name=="round_2_arm_1" & as.numeric(dfls$time.start1)==0)),]
-#dfls = dfls[-c(which(dfls$redcap_event_name=="round_0_arm_1" & as.numeric(dfls$time.start)>100)),]
-
-ggplot(dfls, aes(x=time.start1, group=redcap_event_name)) + geom_histogram() +
-  facet_wrap(~ redcap_event_name)
-
-dfls = dfls[order(dfls$menage_id_member, dfls$time),]
-
-
-# start dates per round
-start.round = dfls %>% group_by(redcap_event_name) %>%
-  summarise(
-  start = min(date.use, na.rm=T)
-)
-start.round
-start.round1 = start.round$start[2] 
-
-# Calculate number of positives per household to add as covariate in the model
-hh_pos = dfls %>% group_by(time, menage_id) %>%
-  summarise(nesbl = sum(esble)
-  )
-hh_pos = hh_pos[order(hh_pos$menage_id, hh_pos$time),]
-
-dfls = left_join(dfls,hh_pos, by=c("menage_id", "time"))
-dfls$nesbl_tminus = lag(dfls$nesbl)
-
-
-
-# Create dataset for analyses
-dfls = dfls %>% mutate(
-  days = as.numeric(date.use - start1) # use individual first stool collection date, as each village had different start of intervention
-) %>% filter(redcap_event_name!="round_0_arm_1" & menage_id_member%in%complete.cases.id)
-length(unique(dfls$menage_id_member))
-table(dfls$menage_id_member, dfls$time) # ALL IDS HAVE THREE OBSERVATIONS
-
-dfls = dfls[order(dfls$menage_id_member,dfls$time),]
-dfls$check.rounds = dfls$time.start1 - lag(dfls$time.start1)
-dfls$check.rounds[dfls$redcap_event_name=="round_1_arm_1"] = NA
-hist(as.numeric(dfls$check.rounds))
-
-# Remove all those with a negative check.round as then the date.collection in next round is before the previous
-table(dfls$check.rounds)
-out = which(dfls$check.rounds<1)
-dfls = dfls[-c(out),] %>% select(-c(date.check,check.rounds))
-
-
-# How many unique individuals
-length(unique(dfls$menage_id_member)) # 754
-dfls = dfls[order(dfls$menage_id_member, dfls$time),]
-
-# Dataset for msm model
-dfls = dfls %>% 
-  mutate(esble = as.numeric(esble)+1) %>%
-  select(-c(date.check.collect, date_conserv, intervention_text,X)) 
-
-reorder_col = c("time", "redcap_event_name","time.start0","time.start1","start0","start1", "days","date.use","menage_id_member", "menage_id",
-                "village_name","intervention.text", "age", "agegr10", "sexe", "n.householdmember","esble","nesbl","nesbl_tminus",
-                "salm", "ast_done",
-                "date","date.stool.collection", "date.consent", "date.check")
-nincl = names(dfls)[!names(dfls)%in%reorder_col]
-desired_order = c(reorder_col,nincl)
-desired_order = desired_order[desired_order%in%names(dfls)]
-dfls =  dfls[,desired_order]
-
-# positive per round
-dfls %>% group_by(time) %>%
-  summarise(
-    esblsum = sum(esble-1),
-    n = length(unique(menage_id_member)),
-    prev = esblsum/n
-  )
-
-
-# Also create a dataset with baseline 0 round included
-d = dfl %>% filter(menage_id_member%in%complete.cases.id & redcap_event_name=="round_0_arm_1")
-
-d = left_join(d, dfls%>%select(menage_id_member,start0, start1, time.start0,time.start1), multiple="first")
-d = d %>% select(-c(X)) %>%
-  mutate(days = as.numeric(date.use - start1))
-
-hh_pos = d %>% group_by(time, menage_id) %>%
-  summarise(nesbl = sum(esble)
-  )
-hh_pos = hh_pos[order(hh_pos$menage_id, hh_pos$time),]
-
-d = left_join(d,hh_pos, by=c("menage_id", "time"))
-d$nesbl_tminus = lag(d$nesbl)
-names(d)
-desired_order
-
-d = d[, desired_order]
-dfls0 = rbind(d,dfls)
-dfls0 = dfls0[order(dfls0$menage_id_member, dfls0$time),]
-
-# check the days variable
-dfls0 %>% group_by(time) %>%
-  ggplot(., aes(x=days)) + geom_histogram() +
-  facet_wrap(.~redcap_event_name)
-
-dfls0 %>% group_by(time) %>%
-  summarise(median=median(days, na.rm=T),
-            q1 = quantile(days,probs=0.25, na.rm=T),
-            q3 = quantile(days,probs=0.75,na.rm=T))
-
+# CREATE DATASETS FOR REGRESSION ANALYSES
 ###############################################################
-# DATASET FOR LOGISTIC REGRESSION MODEL
-###############################################################
+dfls0$intervention.start= ifelse(dfls0$time%in%c(0,1)&dfls0$intervention.text=="intervention", "control", dfls0$intervention.text) # Co-variate that indicates the start time of the intervention
+table(dfls0$time, dfls0$intervention.start)
 
-# Combine categories
-dfa = df %>%
-  mutate(
-    q2.main.water.source.dry.c = ifelse(q2.main.water.source.dry %in% c("Tap house", "Tap concession", "Tap public/fountain", "bagged water"),
-                                        "tap/bottled",
-                                        ifelse(q2.main.water.source.dry %in% c("rainwater", "surface water (ponds, dams,rivers,lakes,pits,irrigation canals)"),
-                                               "other",q2.main.water.source.dry)),
-    q3.main.water.source.rainy.c = ifelse(q3.main.water.source.rainy %in% c("Tap house", "Tap concession", "Tap public/fountain", "bagged water"),
-                                          "tap/bottled",
-                                          ifelse(q3.main.water.source.rainy %in% c("rainwater", "surface water (ponds, dams,rivers,lakes,pits,irrigation canals)"),
-                                                 "other",q3.main.water.source.rainy)),
-    q6.treatment.water.c = ifelse(q6.treatment.water %in%  c("Yes,boiling","Yes,cholinate/add desinfectant",
-                                                             "Yes, filter with cloth", "Yes, filter with filter","Yes, Solar desinfection (in the sun)",
-                                                             "Yes, decant"), "Yes", "No"),  
-    q9.shared.toilet.c = ifelse(q9.shared.toilet %in% c("Yes, public","Yes, other households (non-public)"), "Yes", "No")
-  ) %>% filter(menage_id_member %in%complete.cases.id)
+# Dataset with individuals that have observation at R0, R1 and R2 and where at risk at R2
+df_r2 = df %>% filter((!is.na(r1.esble) & !is.na(r2.esble)) & r1.esble == 0 & (r2.esble == 1| r2.esble == 0)) # 395 Include only those at risk at time 2, regardless of whether they have an observation at R3
+# Dataset with individuals that have observation at R2 and R3 where at risk at R3
+df_r3 = df %>% filter((!is.na(r2.esble)) & r2.esble == 0 & (r3.esble == 1| r3.esble == 0))# 291
 
-reorder_col = c("redcap_event_name","menage_id_member", "menage_id",
-                "village_name","intervention.text", "age", "agegr10", "sexe", "n.householdmember",
-                "r0.esble","r1.esble","r2.esble","r3.esble","r0.salm","r1.salm","r2.salm","r3.salm",
-                "date.use","date","date.stool.collection", "date.consent")
-nincl = names(dfa)[!names(dfa)%in%reorder_col]
-desired_order = c(reorder_col,nincl)
-desired_order = desired_order[desired_order%in%names(dfa)]
-dfa =  dfa[,desired_order]
+# Dataset with individuals that have observation at R0, R1, R2 and R3 where at risk at R2
+df_r2_c = dfa %>% filter(r1.esble == 0 & (r2.esble == 1| r2.esble == 0)) # 340; Include only those at risk at time 2, only among those with complete observations
+# Dataset with individuals that have observation at R0, R1, R2 and R3 where at risk at R2
+df_r3_c = dfa %>% filter(r2.esble == 0 & (r3.esble == 1| r3.esble == 0)) # 267; Include only those at risk at time 2, only among those with complete observations
 
-dfls = dfls %>% select(-c(time.start0,time.start1))
-dfls0 = dfls0 %>% select(-c(time.start0,time.start1))
+# Create the same dataset as df_r2_c and df_r3_c with the longformat dataset for for checking
+dfls2 = dfls0 %>% filter(time==2 & !is.na(acquisition)) # 338 individuals, why the difference of 2 individuals?
+ids = df_r2_c$menage_id_member[which(!df_r2_c$menage_id_member%in%dfls2$menage_id_member)]
+#View(dfl[dfl$menage_id_member%in%ids,]) # The difference is coming from those with the date of consent missing for the round of concern. They
+# are thrown out in the long format, as that is the dataset for the MSM model which needs a date, to calculate the 'day since intervention'.
 
-table(dfa$r1.esble, useNA="always")
-table(dfa$r2.esble, useNA="always")
-table(dfa$r3.esble, useNA="always")
+# Create the same dataset as df_r2_c with the longformat dataset for for checking
+dfls3 = dfls0 %>% filter(time==3 & !is.na(acquisition)) # 264 individuals
 
-# Export dataset
-save(dfa, file="./Data/BF/clean/use_in_analyses/bf_esbl_wide.rda")
-#load("./Data/BF/clean/use_in_analyses/bf_esbl_wide.rda")
+# To keep comparison between the long and wide format, and thus logistic regression and MSM model, use the dfls datasets
+rm(df_r2_c, df_r3_c, dfc)
 
-save(dfls0, file="./Data/BF/clean/use_in_analyses/bf_esbl0123_long.rda")
-save(dfls, file="./Data/BF/clean/use_in_analyses/bf_esbl123_long.rda")
 
 #############################################################
 # DESCRIPTIVES
 #############################################################
-table(df$r0.esble)
-dfa0 = dfa %>% filter(!is.na(r0.esble))
+# Number of individuals per round
+length(unique(df$menage_id_member[!is.na(df$r0.esble)])) # 1209
+length(unique(df$menage_id_member[!is.na(df$r1.esble)])) # 1029
+length(unique(df$menage_id_member[!is.na(df$r2.esble)])) # 1034
+length(unique(df$menage_id_member[!is.na(df$r3.esble)])) # 1006
+
+# Number of interventions per arm
+table(df$intervention.text[!is.na(df$r0.esble)]) # Control: 606
+table(df$intervention.text[!is.na(df$r1.esble)]) # Control: 522
+table(df$intervention.text[!is.na(df$r2.esble)]) # Control: 520
+table(df$intervention.text[!is.na(df$r3.esble)]) # Control: 532
+
+# Number of individuals with R0 and R1
+length(unique(df$menage_id_member[!is.na(df$r0.esble)&!is.na(df$r1.esble)])) # 1018
+table(df$intervention.text[!is.na(df$r0.esble)&!is.na(df$r1.esble)]) # Control: 518
+
+# Number of individuals with R0 and R1 and R2
+length(unique(df$menage_id_member[!is.na(df$r0.esble)&!is.na(df$r1.esble)&!is.na(df$r2.esble)])) # 903
+table(df$intervention.text[!is.na(df$r0.esble)&!is.na(df$r1.esble)&!is.na(df$r2.esble)]) # Control: 461
+
+# Number of individuals with R0 and R1 and R2 and R3
+length(unique(df$menage_id_member[!is.na(df$r0.esble)&!is.na(df$r1.esble)&!is.na(df$r2.esble)&!is.na(df$r3.esble)])) # 803
+table(df$intervention.text[!is.na(df$r0.esble)&!is.na(df$r1.esble)&!is.na(df$r2.esble)&!is.na(df$r3.esble)]) # Control: 425
+
+# Number of individuals with R0 and R1 and R2 and R3 AND NO MISSING CONSENT DATA
+length(unique(dfa$menage_id_member)) # 785
+table(dfa$intervention.text) # Control: 425
+
 
 
 # Table 1
+dfa0 = dfls0%>%filter(time==0)
+dfa1 = dfls0%>%filter(time==1)
+dfa2 = dfls0%>%filter(time==2)
+dfa3 = dfls0%>%filter(time==3)
 
-# trial
-wash_r0_table1 = table1(~ age + sexe + 
+# R0 characteristics among those with four observation rounds
+wash_r0_table1 = table1(~ factor(r0.esble) + age + sexe + 
                           n.householdmember +
+                          r0.ntested + 
                           n.child.0to5 +
                           n.households.concession +
                           antibiotic + 
@@ -333,13 +142,13 @@ wash_r0_table1 = table1(~ age + sexe +
                           q1.diar.prev.filter.water + 
                           q1.diar.prev.other+q1.diar.prev.cant.be.avoided + 
                           q1.diar.prev.dont.know + 
-                          q2.main.water.source.dry.c + 
-                          q3.main.water.source.rainy.c + 
+                          q2.main.water.source.dry + 
+                          q3.main.water.source.rainy + 
                           q4.cans.storage.water + 
                           q5a.cans.storage.water.closed.when.filled +
                           q5b.cans.storage.water.closed.wen.empty + 
                           q5c.cans.cleaned.before.reuse +
-                          q6.treatment.water.c + 
+                          q6.treatment.water + 
                           q7.principle.defication + 
                           q8.other.defecation.flush.toiled.septic + 
                           q8.other.defecation.pit.latrine.ventilation + 
@@ -375,84 +184,329 @@ wash_r0_table1 = table1(~ age + sexe +
                           q21.when.animal.ill.eat.meat.at.home +     
                           q21.when.animal.ill.burie.dispose +
                           q21.when.animal.ill.autre +     
-                          eau.assainissement.hygine.complete| factor(intervention.text), data=dfa0)
+                          eau.assainissement.hygine.complete| factor(intervention.text), data=dfa)
 wash_r0_table1
 
 t1flex(wash_r0_table1) %>% 
   save_as_docx(path="./Output/Tables/wash_r0_table1.docx")
 
 
-# Effect of the intervention M3?
-wash_r2_table1 = table1(~ factor(r2.esble) + age + sexe + 
+# R0 characteristics selected
+wash_r0_table1 = table1(~ age + sexe + 
+                          n.householdmember +
+                          r0.ntested + 
+                          q2.main.water.source.dry.c + 
+                          q3.main.water.source.rainy.c + 
+                          q6.treatment.water.c + 
+                          q7.principle.defication +
+                          q17.animals.around.household | factor(intervention.text), data=dfa)
+wash_r0_table1
+
+# Baseline characteristics  - acquisitions?
+wash_r1_table1 = table1(~ factor(intervention.text) + age + sexe + 
                           antibiotic + 
                           watch  + 
                           n.householdmember +
                           n.child.0to5 +
                           n.households.concession +
-                          q1.diar.prev.water.pot.covered +
-                          village_name | factor(intervention.text), data=dfa)
+                          q2.main.water.source.dry + 
+                          q3.main.water.source.rainy + 
+                          q6.treatment.water + 
+                          q7.principle.defication +
+                          q17.animals.around.household +
+                          village_name | factor(acquisition), data=dfa1%>%filter(!is.na(acquisition)))
+wash_r1_table1
+
+# R2 characteristics  - acquisitions?
+wash_r2_table1 = table1(~ factor(intervention.text) + age + sexe + 
+                          antibiotic + 
+                          watch  + 
+                          n.householdmember +
+                          n.child.0to5 +
+                          n.households.concession +                          
+                          q2.main.water.source.dry + 
+                          q3.main.water.source.rainy + 
+                          q6.treatment.water + 
+                          q7.principle.defication +
+                          q17.animals.around.household +
+                          village_name | factor(acquisition), data=dfa2%>%filter(!is.na(acquisition)))
 wash_r2_table1
 
-
 # Effect of the intervention M9?
-wash_r3_table1 = table1(~ factor(r3.esble) + age + sexe + 
+# R3 characteristics  - acquisitions?
+wash_r3_table1 = table1(~ factor(intervention.text) + age + sexe + 
+                          antibiotic + 
+                          watch  + 
                           n.householdmember +
                           n.child.0to5 +
                           n.households.concession +
-                          q1.diar.prev.water.pot.covered +
-                          village_name | factor(intervention.text), data=dfa)
+                          q2.main.water.source.dry + 
+                          q3.main.water.source.rainy + 
+                          q6.treatment.water + 
+                          q7.principle.defication +
+                          q17.animals.around.household +
+                          village_name | factor(acquisition), data=dfa3%>%filter(!is.na(acquisition)))
 wash_r3_table1
 
+###############################################################
+# TABLES
+###############################################################
 
+da = dfls0 # Change this subject to whether wanting to plot the whole dataset or the selected dataset
+
+# positive per round - full dataset
+dfl %>% group_by(time) %>%
+  summarise(
+    esblsum = sum(esble),
+    n = length(unique(menage_id_member)),
+    prev = esblsum/n
+  )
+
+# positive per round - selected dataset
+dfls0 %>% group_by(intervention.text) %>%
+  summarise(
+    esblsum = sum(esble-1),
+    n = length(unique(menage_id_member)),
+    prev = esblsum/n
+  )
+
+# Acquisitions per round
+# Of note:
+# variable 'acquisition' =  Counts individuals at risk that were for R2, negative at R1; for R3, negative at R2
+# variable 'acquisition2' is for a sensitivity analyses =  Counts individuals at risk that were for R2, negative at R1; for R3, either negative or postive at R2 (assuming a colonisation duration of 4M (paper Bootsma))
+# variable 'acquisition3' =  Counts individuals at risk that were for R2, negative at R0 and R1; for R3, negative at R2
+
+# ACQUISITIONS AMONG THOSE WITH FOUR OBSERVATION ROUNDS
+pa = dfls0 %>% group_by(time, intervention.text) %>%
+  summarise(
+    acqsum = sum(acquisition, na.rm=T),
+    acqsum2 = sum(acquisition2, na.rm=T),
+    acqsum3 = sum(acquisition3, na.rm=T),
+    n = length(unique(menage_id_member)[!is.na(acquisition)]),
+    n2 = length(unique(menage_id_member)),
+    n3 = length(unique(menage_id_member)[!is.na(acquisition3)])
+  )%>%
+  mutate(
+    n2 = ifelse(time==0, 0,
+                ifelse(time%in%c(1,2),n,n2)),
+    prev = acqsum/n,
+    prev2= acqsum2/n2,
+    prev3= acqsum3/n3
+  )
+pa
+
+# DECOLONISATIONS AMONG THOSE WITH FOUR OBSERVATION ROUNDS
+pad = dfls0 %>% group_by(time) %>%
+  summarise(
+    decolsum = sum(decolonisation, na.rm=T),
+    decolsum2 = sum(decolonisation2, na.rm=T),
+    decolsum3 = sum(decolonisation3, na.rm=T),
+    n = length(unique(menage_id_member)[!is.na(decolonisation)]),
+    n2 = length(unique(menage_id_member)),
+    n3 = length(unique(menage_id_member)[!is.na(decolonisation3)])
+  )%>%
+  mutate(
+    n2 = ifelse(time==0, 0,
+                ifelse(time%in%c(1,2),n,n2)),
+    prev = decolsum/n,
+    prev2= decolsum2/n2,
+    prev3= decolsum3/n3
+  )
+pad
+
+
+# acquisitions per round - selected dataset among those at risk
+da$esbllag = lag(da$esble)
+da %>% group_by(time,intervention.text) %>%
+  summarise(
+    acqsum = sum(acquisition, na.rm=T),
+    n = length(unique(menage_id_member)[esbllag!=2]),
+    prev = acqsum/n
+  )
+
+
+# decolonisations per round - selected dataset
+da %>% group_by(time, intervention.text) %>%
+  summarise(
+    decolsum = sum(decolonisation, na.rm=T),
+    n = length(unique(menage_id_member)[esbllag!=1]),
+    prev = decolsum/n
+  )
+
+
+# Per household, how many positive and tested
+dh = da %>% group_by(time, village_name,intervention.text,menage_id) %>%
+  summarise(n.tested = unique(n.tested)[1],
+            nesbl = sum(esble-1),
+            n.atrisk = n.tested-unique(nesbl_tminus)[1],
+            eprev = nesbl/n.tested,
+            nacquisition =sum(acquisition,na.rm=T),
+            aprev = nacquisition/n.atrisk
+            )
+dh = dh[order(dh$menage_id,dh$time),] 
+
+dh%>%group_by(time) %>%
+  summarise(sum(nesbl),
+            sum(nacquisition, na.rm=T),
+            sum(n.atrisk),
+            sum(n.tested))
+
+dv = dh %>% group_by(time, village_name,intervention.text) %>%
+  summarise(n.tested = sum(n.tested),
+            n.atrisk = sum(n.atrisk,na.rm=T),
+            nesbl = sum(nesbl),
+            eprev = nesbl/n.tested,
+            nacquisition = sum(nacquisition, na.rm=T),
+            aprev = nacquisition/n.atrisk
+  )
+
+dv[order(dv$village_name,dv$time),]
+dv%>%group_by(time) %>%
+  summarise(sum(nesbl),
+            sum(nacquisition, na.rm=T),
+            sum(n.atrisk),
+            sum(n.tested))
+
+
+# mean and median colonisation prevalence over village cluster
+dv %>% group_by(time, intervention.text) %>%
+  summarise(
+    meanp = mean(eprev),
+    lower_ci = ggplot2::mean_cl_normal(eprev, conf.int = 0.95)[2],
+    upper_ci = ggplot2::mean_cl_normal(eprev, conf.int = 0.95)[3],
+    median = median(eprev),
+    q1 = quantile(eprev,probs = 0.25),
+    q3 = quantile(eprev,probs=0.75)
+  )
+
+# mean and median acquisition prevalence over village cluster
+dv %>% group_by(time, intervention.text) %>%
+  summarise(
+    meanp = mean(aprev,na.rm=T),
+    lower_ci = ggplot2::mean_cl_normal(aprev, conf.int = 0.95)[2],
+    upper_ci = ggplot2::mean_cl_normal(aprev, conf.int = 0.95)[3],
+    median = median(aprev,na.rm=T),
+    q1 = quantile(aprev,probs = 0.25,na.rm=T),
+    q3 = quantile(aprev,probs=0.75,na.rm=T)
+  )
+
+# month vs round
+start.collection = dfls0 %>%select(c(time,intervention.text,village_name,menage_id, date.use,month)) %>%
+  group_by(time,village_name) %>%
+  summarise(start.collection.village = min(date.use),
+            start.collection.month.village = min(month))
+
+start.collection
+
+dh = left_join(dh,start.collection, by=c("time", "village_name"))
+dv = left_join(dv,start.collection, by=c("time", "village_name"))
+
+table(dv$time,dv$start.collection.month.village)
 
 ###############################################################
 # FIGURES
 ###############################################################
 
-# Antibiotic use per village
+
+# Plot prevalence per household per round
+ggplot(dh, aes(x=start.collection.village, y=eprev, fill=menage_id, group=menage_id)) + geom_point(aes(colour=menage_id)) +
+  geom_line(aes(colour=menage_id)) + 
+  theme_bw() + 
+  theme(legend.position="none",
+          axis.text.x=element_text(size=15, angle=90),
+          axis.title=element_text(size=16,face="bold"),
+          axis.text=element_text(size=14,face="bold"),
+          strip.text=element_text(size=14,face="bold")) + 
+  facet_wrap(.~village_name)
+
+# Plot prevalence per village per round
+ggplot(dv, aes(x=start.collection.village, y=eprev, colour=village_name, 
+               group=village_name)) + geom_point() +
+  geom_line() + 
+  theme_bw() + 
+  theme(legend.position="none",
+        axis.text.x=element_text(size=15),
+        axis.title=element_text(size=16,face="bold"),
+        axis.text=element_text(size=14,face="bold"),
+        strip.text=element_text(size=14,face="bold")) + 
+  facet_wrap(.~village_name,ncol=4)
+
+# Plot acquisitions per village per round
+ggplot(dv, aes(x=start.collection.village, y=aprev, colour=village_name, 
+               group=village_name)) + geom_point(size=3) +
+  geom_line(size=1) + 
+  theme_bw() + 
+  theme(legend.position="none",
+        axis.text.x=element_text(size=15),
+        axis.title=element_text(size=16,face="bold"),
+        axis.text=element_text(size=14,face="bold"),
+        strip.text=element_text(size=14,face="bold")) + 
+  facet_wrap(.~intervention.text,ncol=4)
+
+# Number of individuals included per household
+hist(table(da$menage_id[da$time==1]))
+
+# Trajectories of individuals
+
+for(i in unique(da$village_name)){
+  d = da%>%filter(village_name==i)
+  pdf(file="./Output/Figures/trajectories_indv_v.pdf", width=10,height=10)
+  tid = ggplot(d, aes(x=time, y=esble-1,col=menage_id_member, group=menage_id_member)) + 
+  geom_point(size=2) + geom_line() +
+  facet_wrap(~menage_id_member) +
+  theme(legend.position="none") + 
+    ggtitle(paste0("Village", i))
+  print(tid)
+  dev.off
+}
+
+# number of esbls by date (as villages have had data collection consequatively. Just to see if some seasonality can be found)
+# This to check seasonal effect
+dat = dfls0 %>% group_by(date.use,intervention.text) %>%
+  summarise(nesbl = sum(esble-1))
+
+ggplot(dat, aes(x=date.use, y=nesbl, col=intervention.text)) + geom_point() + geom_smooth()
+
+dat = dfls0 %>% group_by(month,intervention.text) %>%
+  summarise(nesbl = sum(esble-1),
+            ntest = length(menage_id_member),
+            prev = nesbl/ntest)
+
+dat = dat %>% filter(!is.na(month))
+
+ggplot(dat, aes(x=month, y=nesbl, col=intervention.text,group=intervention.text)) + 
+  geom_point(size=2) + geom_smooth() + geom_line() 
+
+bs = ggplot(dat, aes(x=month, y=prev, col=intervention.text,group=intervention.text)) + 
+  geom_vline(aes(xintercept =1), lty="dashed", size=1, col=c("grey"))+
+  geom_vline(aes(xintercept =4), lty="dashed", size=1, col=c("grey"))+
+  geom_vline(aes(xintercept =10), lty="dashed", size=1, col=c("grey"))+
+  geom_vline(aes(xintercept =6), lty=1, size=1, col=c("darkgreen"))+
+  
+  geom_point(size=2) + geom_smooth(size=2) + 
+  theme_bw() + 
+  theme(
+        axis.text.x=element_text(size=15),
+        axis.title=element_text(size=16,face="bold"),
+        axis.text=element_text(size=14,face="bold"),
+        strip.text=element_text(size=14,face="bold"))+
+  labs(title = "Smoothed fit of ESBL-E positive (%) per month",
+       x = "Month",
+       y = "% positive")# There appears to be a seasonal effect
+bs
 
 
-# Per household, how many positive
-d0 = df0 %>% group_by(village_name, intervention_text, menage_id, r0.esble) %>%
-  summarise(n = n())
-
-samples_per_hh = df0 %>% group_by(menage_id) %>%
-  summarise(n_samples = n())
-
-hh_size = as.data.frame(cbind(df0$menage_id,df0$n.householdmember))
-names(hh_size) = c("menage_id","hh_size")
-hh_size = hh_size[!duplicated(hh_size),]
-
-d = left_join(d0, hh_size, by="menage_id") %>%
-  left_join(., samples_per_hh) %>% 
-  mutate(hh_size = as.numeric(hh_size),
-         hh_size_cor = ifelse(hh_size >7, 7, hh_size),
-         n = as.numeric(n),
-         n_samples = as.numeric(n_samples),
-         f_pos = round(n/hh_size,2),
-         f_pos_samples_taken = round(n/n_samples,2), # Number of positives over total samples taken
-         f_pos_cor = round(n/hh_size_cor,2), # Assuming not all sample individuals are in the R0 database, but max of 7 individuals sampled per household
-         f_pos_cor = ifelse(f_pos_cor>1, round(n/hh_size,2), f_pos_cor)
+median_t = dv %>% filter(time==0) %>% group_by(intervention.text) %>%
+  summarise(
+    median = median(eprev),
+    mean=mean(eprev)
   )
-d_pos = d %>% filter(r0.esble==1)
-max(d_pos$f_pos_cor, na.rm=T) # still observations above 1 needs checking
 
+median_t
 
-# For the larger households, not all are tested. At one point we stopped at max 5 per household
-hist(as.numeric(d_pos$hh_size))
-
-# Plot number of sampled positive ESBLs per household
-summary(d_pos$f_pos)
-summary(d_pos$f_pos_cor)
-
-median = summary(d_pos$f_pos_cor)[3]
-median_i = summary(d_pos$f_pos_cor[d_pos$intervention_text=="intervention"])[3]
-median_ni = summary(d_pos$f_pos_cor[d_pos$intervention_text=="contrôle"])[3]
-median_t = data.frame(rbind(c("intervention", median_i),c("contrôle", median_ni)))
-names(median_t) = c("intervention_text", "Median")
-
-# Plot boxplot of fraction positive per village per intervention group
-bp = ggplot(d_pos, aes(x = village_name, y = f_pos_cor, fill = village_name)) +
+# Plot boxplot of fraction positive per village per intervention group based on household prevalence
+bp = dh %>% filter(time==1& !n.tested %in%c(0,1)) %>% 
+  ggplot(., aes(x = reorder(village_name, eprev),village_name, y = eprev, fill = village_name)) +
   geom_jitter(alpha=0.5) + theme_bw() +
   # geom_hline(yintercept=median, 
   #            color = "red", size=2) +
@@ -462,51 +516,81 @@ bp = ggplot(d_pos, aes(x = village_name, y = f_pos_cor, fill = village_name)) +
                          axis.text=element_text(size=14,face="bold"),
                          strip.text=element_text(size=14,face="bold")) +
   ylim(0,1) + 
-  facet_wrap(~intervention_text, scales=("free_x")) + 
-  geom_abline(data = median_t, aes(intercept = as.numeric(Median), slope = 0),lty="dashed", size=1, col="red")+ 
+  facet_wrap(~intervention.text, scales=("free_x")) + 
+  geom_abline(data = median_t, aes(intercept = as.numeric(median), slope = 0),lty="dashed", size=1, col="red")+ 
   labs(title = "Boxplot of ESBL-E positive (%) per village cluster (Baseline)",
        x = "Village",
        y = "% positive")
 print(bp)
 
-d_sum = d %>% group_by(village_name,intervention_text) %>%
-  summarise(mean = mean(f_pos_cor, na.rm=T),
-            median = median(f_pos_cor,na.rm=T),
-            q1 = quantile(f_pos_cor,probs=c(0.25), na.rm = T),
-            q3 = quantile(f_pos_cor, probs=c(0.75), na.rm = T))
-d_sum
+# Number of individuals tested vs esbl positive - is there a pattern? If not 
+# with prevalence then good
+ggplot(dh, aes(x=n.tested, y=nesbl, col=factor(time))) + geom_point() + geom_jitter()
+ggplot(dh, aes(x=n.tested, y=eprev, col=factor(time))) + geom_point() + geom_jitter()
 
-# Intervention vs controle groups 
-d_pos %>% group_by(intervention_text) %>%
-  summarise(mean_cor = mean(f_pos_cor, na.rm=T),
-            median_cor = median(f_pos_cor,na.rm=T),
-            q1_cor = quantile(f_pos_cor,probs=c(0.25), na.rm = T),
-            q3_cor = quantile(f_pos_cor, probs=c(0.75), na.rm = T),
-            mean = mean(f_pos, na.rm=T),
-            median = median(f_pos,na.rm=T)) # seems rather similar (luckily)
+# Boxplot of eprev by intervention per round
+bpi = dv %>% 
+  ggplot(., aes(x = factor(time), y = eprev, fill = intervention.text)) +
+  geom_abline(data = median_t, aes(intercept = as.numeric(median), slope = 0),lty="dashed", size=1, col=c("red", "turquoise"))+ 
+  geom_vline(data = dv%>% filter(time==1), aes(xintercept =time+0.5), lty="dashed", size=1, col=c("grey"))+
+  geom_jitter(alpha=0.5,size=3) + theme_bw() +
+  # geom_hline(yintercept=median, 
+  #            color = "red", size=2) +
+  geom_boxplot() + theme(
+                         axis.text.x=element_text(size=15),
+                         axis.title=element_text(size=16,face="bold"),
+                         axis.text=element_text(size=14,face="bold"),
+                         strip.text=element_text(size=14,face="bold")) +
+  ylim(0,1) + 
+  labs(title = "Boxplot of fraction ESBL-E positive across village clusters",
+       x = "Round",
+       y = "Positive/n tested")
+print(bpi)
 
-# Distribution %ESBL_pos per cluster
-ggplot(d_pos, aes(x=f_pos_cor, group=village_name, fill=village_name)) + 
-  geom_histogram() + facet_wrap(.~ village_name) +
-  theme_bw() +
-  theme(legend.position="none",
-        axis.text.x=element_text(size=12),
-        axis.title=element_text(size=16,face="bold"),
-        axis.text=element_text(size=12,face="bold"),
-        strip.text=element_text(size=12,face="bold")) +
-  xlim(0,1) + 
-  labs(x="ESBL-E positive (%) within household", y="number of households")
+median_ta = dv %>% filter(time==1) %>% group_by(intervention.text) %>%
+  summarise(
+    median = median(aprev),
+    mean=mean(aprev)
+  )
 
-mean <- d_pos %>% group_by(village_name) %>%
-  summarise(mean = mean(f_pos_cor, na.rm=T),)
+median_ta
 
-# Distribution %ESBL_pos per cluster
-dp = ggplot(d_pos, aes(x=f_pos_cor, group=village_name, fill=village_name)) + 
-  geom_density(aes(f_pos_cor, ..scaled..))+ 
-  facet_wrap(.~village_name)+ geom_vline(data=mean, aes(xintercept=mean))+
-  labs(x="%positive within hh", y="Density")
-dp
+bai =  dv %>% filter(time!=0) %>%
+  ggplot(., aes(x = factor(time), y = aprev, fill = intervention.text)) +
+  geom_abline(data = median_ta, aes(intercept = as.numeric(median), slope = 0),lty="dashed", size=1, col=c("red", "turquoise"))+ 
+  geom_jitter(alpha=0.5,size=3) + theme_bw() +
+  # geom_hline(yintercept=median, 
+  #            color = "red", size=2) +
+  geom_boxplot() + theme(
+    axis.text.x=element_text(size=15),
+    axis.title=element_text(size=16,face="bold"),
+    axis.text=element_text(size=14,face="bold"),
+    strip.text=element_text(size=14,face="bold")) +
+  ylim(0,1) + 
+  labs(title = "Boxplot of ESBL-E acquisitions across village clusters",
+       x = "Round",
+       y = "Acquired/at risk")
+print(bai)
 
+pdf(file="./Output/Figures/prevalence_per_month.pdf", width=10,height=7)
+print(bs)
+dev.off()
+
+pdf(file="./Output/Figures/prevalence_per_village_meanv.pdf", width=10,height=7)
+print(bpi)
+dev.off()
+
+pdf(file="./Output/Figures/prevalence_acq_per_village_meanv.pdf", width=10,height=7)
+print(bai)
+dev.off()
+
+pdf(file="./Output/Figures/prevalence_esbl_acq_per_village_meanv.pdf", width=15,height=5)
+print(multiplot(bpi, bai, cols=2))
+dev.off()
+
+pdf(file="./Output/Figures/trajectories_indv_v.pdf", width=15,height=15)
+print(tid)
+dev.off()
 
 #####################################################################
 # REGRESSION MODEL
@@ -522,129 +606,673 @@ dp
 #  outcome is 1 if r2_esbl_pos  
 # adjust for clustering at household level (menage_id) and include covariates for age (age), sex (sexe) and 
 # intervention (as coded in field intervention_text)
-# then as a sensitivity analysis consider only thoe with two initial negative swab
-dfa_early = dfa %>% filter(r1.esble !=0)
-dfa_early_sens = dfa %>% filter(r1.esble !=0 & r0.esble!=0)
+# then as a sensitivity analysis consider only those with two initial negative swab
 
-dfa_late = dfa %>% filter(r2.esble !=0)
+################################################################
+# RANDOM-EFFECTS MODEL - Acquisition
+################################################################
 
 # first with no random effects or other covariates
-m0 <- glm(r2.esble ~ intervention.text, data=dfa_early,  family = binomial(link = "logit"))
-summary(m0)
-exp(m0$coefficients)
-exp(confint(m0)) # # Effect intervention: OR = 
+# first with random effects and no other covariates
+# first with random effects and other covariates
+table(dfls2$acquisition)
 
-# then with covariates and random effects 
-m1.early <-glmer(r2.esble ~ intervention.text + (1|menage_id), data=dfa_early,  family = binomial(link = "logit"))
-summary(m1.early)
-exp(fixef(m1.early))
-exp(confint(m1.early, method="Wald"))  # Effect intervention: OR = 
+# Fit odds ratios for R2 acquisitions only
+ma2_r2 <- glmer(acquisition ~ intervention.text + age + sexe + (1|menage_id), 
+             data=dfls2,  family = binomial(link = "logit"))
+summary(ma2_r2)
+data.frame(exp(fixef(ma2_r2)))
+exp(confint(ma2_r2,method="Wald"))  # Effect intervention: OR = 1.13 (0.64 - 1.79);
 
-# then with covariates and random effects 
-m1.late<-glmer(r3.esble ~ intervention.text + (1|menage_id), data=dfa_late,  family = binomial(link = "logit"))
-summary(m1.late)
-exp(fixef(m1.late))
-exp(confint(m1.late, method="Wald"))  # Effect intervention: OR = 
+# Fit odds ratios for R3 acquisitions only
+ma2_r3 <- glmer(acquisition ~ intervention.text + age + sexe + (1|menage_id), 
+                data=dfls3,  family = binomial(link = "logit"))
+summary(ma2_r3)
+data.frame(exp(fixef(ma2_r3)))
+exp(confint(ma2_r3,method="Wald"))  # Effect intervention: OR = 0.90 (0.46 - 1.78); 
 
-
-# Sensitivity analyses where individuals are both negative at R0 and R1
-# first with no random effects or other covariates
-m0.s <- glm(r2.esble ~ intervention.text, data=dfa_early_sens,  family = binomial(link = "logit"))
-summary(m0.s)
-exp(m0.s$coefficients)
-exp(confint(m0.s)) # # Effect intervention: OR =
-# 
-# # then with covariates and random effects 
-m1.s<-glmer(r2.esble ~ intervention.text + (1|menage_id), data=dfa_early_sens,  family = binomial(link = "logit"))
-summary(m1.s)
-exp(fixef(m1.s))
-exp(confint(m1.s, method="Wald"))  # Effect intervention: OR =
-# 
+# Fit odds for R3 acquisition - sensitivity analyses
+ma2_r3s <- glmer(acquisition2 ~ intervention.text + age + sexe + (1|menage_id), 
+                data=dfls3,  family = binomial(link = "logit"))
+summary(ma2_r3s)
+data.frame(exp(fixef(ma2_r3s)))
+exp(confint(ma2_r3s,method="Wald"))  # Effect intervention: OR = 0.82 (0.53 - 1.26); 
 
 
 # Now fit both together
-m2 <- glmer(esble-1 ~ intervention.text + intervention.text*factor(time) + (1|menage_id_member), data=dfls,  family = binomial(link = "logit"))
-summary(m2)
-exp(fixef(m2))
-exp(confint(m2, method="Wald"))  # Effect intervention: OR = 1.13 (0.83 - 1.53); then each time step, the intervention effect is stronger
-
-# Change in log odds = coef for intervention + coef intervention:time
-change_lo_m3 = fixef(m2)[2] + fixef(m2)[3] # m3
-prob_in_m3 =1/(1+exp(-change_lo_m3))
-prob_in_m3 # Change in log odds compared to T = 1 (intervention start)
-
-change_lo_m9 = fixef(m2)[2] + fixef(m2)[4] # m9
-prob_in_m9 =1/(1+exp(-change_lo_m9))
-prob_in_m9
+ma2 <- glmer(acquisition ~ intervention.start + age + sexe + (1|menage_id_member), 
+             data=dfls0,  family = binomial(link = "logit"))
+summary(ma2)
+data.frame(exp(fixef(ma2)))
+exp(confint(ma2,method="Wald"))  
+# exp(confint(ma2)) # Failed to converge with bootstrap method
 
 
-# Define a function to calculate the change in log odds
-calculate_log_odds_change <- function(coef_intervention, coef_interaction, time_factor) {
-  # Calculate the change in log odds for each level of time
-  change_in_log_odds <- coef_intervention +
-    coef_interaction
+# MODEL WITH 'SEASONALITY' (CYCLIC SPLINES, R PICK) + covariates
+d= dfls0 %>% mutate(menage_id_member = as.factor(menage_id_member),
+                    village_name = as.factor(village_name))
+
+# Without seasonality
+ma2gam = gamm(acquisition ~ age + sexe + intervention.start,
+            random=list(village_name=~1,menage_id_member=~1), 
+            family=binomial(link = "logit"), data=d)
+summary(ma2gam$gam)
+
+# Without seasonality but with time
+ma2tgam = gamm(acquisition ~ age + sexe + intervention.start +
+              factor(time),
+              random=list(village_name=~1, menage_id_member=~1), 
+              family=binomial(link = "logit"), data=d)
+
+# Without seasonality and different effect at time 2 and 3 by fitting interaction term with time gives error; with days3 not
+# mas2inter_gam = gamm(acquisition ~ age + sexe + intervention.start*factor(time) + 
+#                       s(as.numeric(month), bs="cc"),
+#                     random=list(village_name=~1,menage_id_member=~1), 
+#                     family=binomial(link = "logit"), data=d)
+# 
+# summary(mas2inter_gam$gam)
+
+mas2inter_gam = gamm(acquisition ~ age + sexe + intervention.start*days3 + 
+                       s(as.numeric(month), bs="cc"),
+                     random=list(village_name=~1,menage_id_member=~1), 
+                     family=binomial(link = "logit"), data=d)
+
+summary(mas2inter_gam$gam)
+
+
+# With seasonality
+mas2gam = gamm(acquisition ~ age + sexe + intervention.start + 
+              s(as.numeric(month), bs="cc"),
+            random=list(village_name=~1,menage_id_member=~1), 
+            family=binomial(link = "logit"), data=d)
+
+summary(mas2gam$gam)
+
+d$days3 = d$days
+d$days3[d$time==0] = 0
+
+
+# With seasonality - Sensitivity analyses (acquisition R3 = ESBL-E is 0 or 1 at R2)
+mas2sgam = gamm(acquisition2 ~ age + sexe + intervention.start +
+              s(as.numeric(month), bs="cc"),
+            random=list(village_name=~1,menage_id_member=~1), 
+            family=binomial(link = "logit"), data=d)
+
+# Model fitted during ECCMID
+mas2gam_eccmid = gamm(acquisition ~ age + sexe + intervention.text*factor(time) + 
+                 s(as.numeric(month), bs="cc"),
+               random=list(village_name=~1,menage_id_member=~1), 
+               family=binomial(link = "logit"), data=d)
+
+summary(mas2gam_eccmid$gam)
+
+# Model fitted during ECCMID - sensitivity
+mas2sgam_eccmid = gamm(acquisition2 ~ age + sexe + intervention.text*factor(time) + 
+                        s(as.numeric(month), bs="cc"),
+                      random=list(village_name=~1,menage_id_member=~1), 
+                      family=binomial(link = "logit"), data=d)
+
+summary(mas2sgam_eccmid$gam)
+
+# PLOT SEASONAL TERM
+# The seasonal term seems to make sense
+plot(mas2gam$gam,
+     trans=plogis,
+     pages=1,
+     seWithMean = T)
+gam.check(mas2$gam)
+
+# The seasonal term seems to make sense - sensitivity analyses
+plot(mas2sgam$gam,
+     trans=plogis,
+     pages=1,
+     seWithMean = T)
+
+# The seasonal term seems to make sense - sensitivity analyses
+plot(mas2gam_eccmid$gam,
+     trans=plogis,
+     pages=1,
+     seWithMean = T)
+
+plot(mas2sgam_eccmid$gam,
+     trans=plogis,
+     pages=1,
+     seWithMean = T)
+
+# PLOT ODDS RATIOS - MODEL WITHOUT SEASONALITY
+# Extract the model coefficients and standard errors
+coef_summary <- summary(ma2gam$gam)
+
+# Extract the coefficients and standard errors
+coefficients <- coef_summary$p.coeff
+standard_errors <- coef_summary$se[1:length(coefficients)]
+
+# Compute the odds ratios
+odds_ratios <- exp(coefficients)
+
+# Compute the confidence intervals for the odds ratios
+# May want to bootstrap those
+lower_ci <- exp(coefficients - 1.96 * standard_errors)
+upper_ci <- exp(coefficients + 1.96 * standard_errors)
+
+fitnos = data.frame(cbind(odds_ratios,lower_ci, upper_ci))
+fitnos$variable =row.names(fitnos)
+fitnos$variable = factor(fitnos$variable, levels=unique(fitnos$variable))
+fitnos
+
+# PLOT ODDS RATIOS - MODEL WITH SEASONALITY and INTERACTION TERMS DAYS
+# Extract the model coefficients and standard errors
+coef_summary <- summary(mas2inter_gam$gam)
+
+# Extract the coefficients and standard errors
+coefficients <- coef_summary$p.coeff
+standard_errors <- coef_summary$se[1:length(coefficients)]
+
+# Compute the odds ratios
+odds_ratios <- exp(coefficients)
+
+# Compute the confidence intervals for the odds ratios
+# May want to bootstrap those
+lower_ci <- exp(coefficients - 1.96 * standard_errors)
+upper_ci <- exp(coefficients + 1.96 * standard_errors)
+
+fitinter = data.frame(cbind(odds_ratios,lower_ci, upper_ci))
+fitinter$variable =row.names(fitinter)
+fitinter$variable = factor(fitinter$variable, levels=unique(fitinter$variable))
+fitinter
+
+# PLOT ODDS RATIOS - MODEL WITH SEASONALITY
+# Extract the model coefficients and standard errors
+coef_summary <- summary(mas2gam$gam)
+
+# Extract the coefficients and standard errors
+coefficients <- coef_summary$p.coeff
+standard_errors <- coef_summary$se[1:length(coefficients)]
+
+# Compute the odds ratios
+odds_ratios <- exp(coefficients)
+
+# Compute the confidence intervals for the odds ratios
+# May want to bootstrap those
+lower_ci <- exp(coefficients - 1.96 * standard_errors)
+upper_ci <- exp(coefficients + 1.96 * standard_errors)
+
+fit = data.frame(cbind(odds_ratios,lower_ci, upper_ci))
+fit$variable =row.names(fit)
+fit$variable = factor(fit$variable, levels=unique(fit$variable))
+fit
+
+
+
+
+# PLOT ODDS RATIOS - SENSITIVITY analyses
+# Extract the model coefficients and standard errors
+coef_summary <- summary(mas2sgam$gam)
+
+# Extract the coefficients and standard errors
+coefficients <- coef_summary$p.coeff
+standard_errors <- coef_summary$se[1:length(coefficients)]
+
+# Compute the odds ratios
+odds_ratios <- exp(coefficients)
+
+# Compute the confidence intervals for the odds ratios 
+lower_ci <- exp(coefficients - 1.96 * standard_errors)
+upper_ci <- exp(coefficients + 1.96 * standard_errors)
+
+fits = data.frame(cbind(odds_ratios,lower_ci, upper_ci))
+fits$variable =row.names(fits)
+fits$variable = factor(fits$variable, levels=unique(fits$variable))
+fits
+
+# PLOT ODDS RATIOS - ECCMID
+# Extract the model coefficients and standard errors
+coef_summary <- summary(mas2gam_eccmid$gam)
+
+# Extract the coefficients and standard errors
+coefficients <- coef_summary$p.coeff
+standard_errors <- coef_summary$se[1:length(coefficients)]
+
+# Compute the odds ratios
+odds_ratios <- exp(coefficients)
+
+# Compute the confidence intervals for the odds ratios 
+lower_ci <- exp(coefficients - 1.96 * standard_errors)
+upper_ci <- exp(coefficients + 1.96 * standard_errors)
+
+fit_eccmid = data.frame(cbind(odds_ratios,lower_ci, upper_ci))
+fit_eccmid$variable =row.names(fit_eccmid)
+fit_eccmid$variable = factor(fit_eccmid$variable, levels=unique(fit_eccmid$variable))
+fit_eccmid
+
+# PLOT ODDS RATIOS - ECCMID SENSITIVITY ANALYSES
+# Extract the model coefficients and standard errors
+coef_summary <- summary(mas2sgam_eccmid$gam)
+
+# Extract the coefficients and standard errors
+coefficients <- coef_summary$p.coeff
+standard_errors <- coef_summary$se[1:length(coefficients)]
+
+# Compute the odds ratios
+odds_ratios <- exp(coefficients)
+
+# Compute the confidence intervals for the odds ratios 
+lower_ci <- exp(coefficients - 1.96 * standard_errors)
+upper_ci <- exp(coefficients + 1.96 * standard_errors)
+
+fit_eccmid_s = data.frame(cbind(odds_ratios,lower_ci, upper_ci))
+fit_eccmid_s$variable =row.names(fit_eccmid_s)
+fit_eccmid_s$variable = factor(fit_eccmid_s$variable, levels=unique(fit_eccmid_s$variable))
+fit_eccmid_s
+
+# Plot the odds ratios with confidence intervals
+ms = ggplot(fits, aes(x=odds_ratios, y=variable)) + geom_point(size=3)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower_ci, xmax = upper_ci), 
+                 position = position_dodge(width = 0.2),size=1)+
+  theme_bw()+ theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  labs(title = "Odds ratios for ESBL-acquisition (9M at risk: 3M ESBL-E = 0|1)",
+       x = "Odds ratio",
+       y = "")+
+  xlim(0,3)# +
+  # scale_y_discrete(breaks = c("age","sexeMale","intervention.textintervention",
+  #                             "factor(time)2","factor(time)3",
+  #                             "intervention.textintervention:factor(time)2",
+  #                             "intervention.textintervention:factor(time)3"),  # Set custom breaks
+  #                  labels = c("Age", "Sex: Male", "Intervention: Yes",
+  #                  "R2",
+  #                             "R3","Intervention: R2",
+  #                             "Intervention: R3"))
+
+
+ms
+
+
+
+#fit = melt(fit,value.name="" )
+# Plot the odds ratios with confidence intervals
+mnos = ggplot(fitnos, aes(x=odds_ratios, y=variable)) + geom_point(size=3)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower_ci, xmax = upper_ci), 
+                 position = position_dodge(width = 0.2),size=1)+
+  theme_bw()+ theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  labs(title = "Odds ratios for ESBL-acquisition - No seasonality",
+       x = "Odds ratio",
+       y = "")+
+  # scale_y_discrete(breaks = c("age","sexeMale","intervention.textintervention",
+  #                             "factor(time)2","factor(time)3",
+  #                             "intervention.textintervention:factor(time)2",
+  #                             "intervention.textintervention:factor(time)3"),  # Set custom breaks
+  #                  labels = c("Age", "Sex: Male", "Intervention: Yes",
+  #                             "R2",
+  #                             "R3","Intervention: R2",
+  #                             "Intervention: R3")) +
+  xlim(0,3)
+mnos
+
+
+
+# Plot the odds ratios with confidence intervals
+ms = ggplot(fits, aes(x=odds_ratios, y=variable)) + geom_point(size=3)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower_ci, xmax = upper_ci), 
+                 position = position_dodge(width = 0.2),size=1)+
+  theme_bw()+ theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  labs(title = "Odds ratios for ESBL-acquisition - Seasonality (9M at risk: 3M ESBL-E = 0|1)",
+       x = "Odds ratio",
+       y = "")+
+  xlim(0,3)# +
+# scale_y_discrete(breaks = c("age","sexeMale","intervention.textintervention",
+#                             "factor(time)2","factor(time)3",
+#                             "intervention.textintervention:factor(time)2",
+#                             "intervention.textintervention:factor(time)3"),  # Set custom breaks
+#                  labels = c("Age", "Sex: Male", "Intervention: Yes",
+#                  "R2",
+#                             "R3","Intervention: R2",
+#                             "Intervention: R3"))
+
+
+ms
+
+
+m = ggplot(fit, aes(x=odds_ratios, y=variable)) + geom_point(size=3)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower_ci, xmax = upper_ci), 
+                 position = position_dodge(width = 0.2),size=1)+
+  theme_bw()+ theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  labs(title = "Odds ratios for ESBL-acquisition - Seasonality (9M at risk: 3M ESBL-E = 0)",
+       x = "Odds ratio",
+       y = "")+
+  # scale_y_discrete(breaks = c("age","sexeMale","intervention.textintervention",
+  #                             "factor(time)2","factor(time)3",
+  #                             "intervention.textintervention:factor(time)2",
+  #                             "intervention.textintervention:factor(time)3"),  # Set custom breaks
+  #                  labels = c("Age", "Sex: Male", "Intervention: Yes",
+  #                             "R2",
+  #                             "R3","Intervention: R2",
+  #                             "Intervention: R3")) +
+  xlim(0,3)
+m
+
+
+m_eccmid = ggplot(fit_eccmid, aes(x=odds_ratios, y=variable)) + geom_point(size=3)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower_ci, xmax = upper_ci), 
+                 position = position_dodge(width = 0.2),size=1)+
+  theme_bw()+ theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  labs(title = "Odds ratios for ESBL-acquisition - ECCMID (seasonality + interaction time (R1,R2,R3)*intervention.group)",
+       x = "Odds ratio",
+       y = "")
+  # scale_y_discrete(breaks = c("age","sexeMale","intervention.textintervention",
+  #                             "factor(time)2","factor(time)3",
+  #                             "intervention.textintervention:factor(time)2",
+  #                             "intervention.textintervention:factor(time)3"),  # Set custom breaks
+  #                  labels = c("Age", "Sex: Male", "Intervention: Yes",
+  #                             "R2",
+  #                             "R3","Intervention: R2",
+  #                             "Intervention: R3")) +
   
-  return(change_in_log_odds)
+m_eccmid
+
+m_eccmid_s = ggplot(fit_eccmid_s, aes(x=odds_ratios, y=variable)) + geom_point(size=3)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower_ci, xmax = upper_ci), 
+                 position = position_dodge(width = 0.2),size=1)+
+  theme_bw()+ theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  labs(title = "Odds ratios for ESBL-acquisition - ECCMID (sensitivity, i.e. 9M at risk: 3M ESBL-E = 0|1)",
+       x = "Odds ratio",
+       y = "")
+# scale_y_discrete(breaks = c("age","sexeMale","intervention.textintervention",
+#                             "factor(time)2","factor(time)3",
+#                             "intervention.textintervention:factor(time)2",
+#                             "intervention.textintervention:factor(time)3"),  # Set custom breaks
+#                  labels = c("Age", "Sex: Male", "Intervention: Yes",
+#                             "R2",
+#                             "R3","Intervention: R2",
+#                             "Intervention: R3")) +
+
+m_eccmid_s
+
+pdf("./Output/Figures/fit_plotOR.pdf", width=25,height = 20)
+print(multiplot(m,m_eccmid,mnos,ms,m_eccmid_s,cols=2))
+dev.off()
+# Get probability of acquistion at T2 and T3
+##############################################
+# Assuming 'intervention_group_value' is 1 for intervention group and 0 for control group
+# and 'time_value' is the specific time point for which you want to calculate the probability
+set.seed(40)
+village = sample(unique(d$village_name[d$intervention.text=="intervention"]),1)
+id = sample(unique(d$menage_id_member[d$village_name%in%village]), 1)
+new_data = d %>% filter(menage_id_member==id,time!=0) %>% select(time, month,village_name,
+                                 menage_id,menage_id_member,
+                                 intervention.text,age,sexe)
+
+
+new_data$age = median(d$age,na.rm=T)
+new_data$sexe = "Female"
+new_data$time = c(1:3)
+#new_data$month = c("03","07", "11")
+new_data$intervention.text = "intervention"
+#new_data$village_name = "BOLOGHO"
+new_data
+
+# Get probabilities for time 1 - 3
+predict(mas2$gam,newdata=new_data,type="response")
+
+# Bootstrap confidence intervals
+#############################################
+
+# Define a function to obtain predicted values for a given combination of predictor values
+predict_values <- function(model, newdata) {
+  predict(model, newdata = newdata, type = "response")
 }
 
-# Resample the dataset and fit the model
-bootstrap_results_r2 <- replicate(100, {
-  # Sample with replacement
-  bootstrap_sample <- sample_n(dfls, size = nrow(dfls), replace = TRUE)
-  
-  # Fit the model on bootstrap sample
-  bootstrap_model <- glmer(esble-1 ~ intervention.text * factor(time) + (1 | menage_id_member), 
-                           data = bootstrap_sample,
-                           family = binomial)
-  
-  # Extract coefficients from the model
-  coef_intervention <- fixef(bootstrap_model)["intervention.textintervention"]
-  coef_interaction <- fixef(bootstrap_model)["intervention.textintervention:factor(time)2"]
-  
-  # Get the levels of time factor
-  time_levels <- levels(factor(bootstrap_sample$time))[2]
-  
-  # Calculate change in log odds for each level of time
-  log_odds_change <- calculate_log_odds_change(coef_intervention, coef_interaction)
+# Set the number of bootstrap samples
+num_bootstraps <- 100
 
-  
-  return(log_odds_change)
-})
+# Initialize a vector to store predicted values
+predicted_probabilities <- matrix(NA, nrow = num_bootstraps, ncol = 6)
+predicted_probabilities_sens <- matrix(NA, nrow = num_bootstraps, ncol = 6)
 
-bootstrap_results_r2
-# Calculate confidence intervals
-boot_ci_r2 <- quantile(bootstrap_results_r2, c(0.025, 0.975))
+set.seed(100)
+id = sample(unique(dfls0$menage_id_member[dfls0$village_name%in%village]), 1)
+village = sample(unique(d$village_name[d$intervention.text=="intervention"]),1)
+id;village
+
+# Perform bootstrapping
+for (i in 1:num_bootstraps) {
+  # Generate a bootstrap sample by resampling with replacement
+  ids = sample(d$menage_id_member,size=length(unique(d$menage_id_member)),
+               replace=T)
+  ids = data.frame(ids) %>% rename(menage_id_member="ids")
+  bootstrap_data <- left_join(ids,d, by="menage_id_member")
+  bootstrap_data = rbind(bootstrap_data, d%>%filter(menage_id_member==id))
+  new_data = bootstrap_data %>% filter(time!=0)
+  new_data$intervention.text = "intervention"
+  
+  new_data2 = bootstrap_data %>% filter(time!=0)
+  new_data2$intervention.text = "control"
+  new_data = rbind(new_data,new_data2)
+  # new_data = bootstrap_data %>% filter(menage_id_member==id,time!=0) %>% select(time, month,village_name,
+  #                                                                  menage_id,menage_id_member,
+  #                                                                  intervention.text,age,sexe)
+  # 
+  # new_data = new_data %>% filter(!duplicated(time))
+  # new_data$age = median(d$age,na.rm=T)
+  # new_data$sexe = "Female"
+  # new_data$time = c(1:3)
+  # #new_data$month = c("03","07", "11")
+  # new_data$intervention.text = "intervention"
+  # new_data = rbind(new_data,new_data)
+  # new_data$intervention.text = c(rep("intervention",3),  c(rep("control",3)))
+  # #new_data$village_name = "BOLOGHO"
+  # 
+  # Fit the GAMM model to the bootstrap sample
+  bootstrap_model <- gamm(acquisition ~ age + sexe + intervention.text*factor(time) + 
+                            s(as.numeric(month), bs="cc"),
+                          random=list(village_name=~1, menage_id_member=~1), 
+                          family=binomial(link = "logit"), data=bootstrap_data)
+  
+  bootstrap_model_sens <- gamm(acquisition2 ~ age + sexe + intervention.text*factor(time) + 
+                            s(as.numeric(month), bs="cc"),
+                          random=list(village_name=~1, menage_id_member=~1), 
+                          family=binomial(link = "logit"), data=bootstrap_data)
+  
+  # Calculate predicted values using the fitted model
+  
+  p <- predict(bootstrap_model$gam, newdata = new_data, type = "response")
+  p = data.frame(cbind(p, new_data$time, new_data$intervention.text))
+  names(p) = c("prob","time", "intervention.text")
+  p = p %>% group_by(time,intervention.text) %>% summarise(
+    median = median(as.numeric(prob), na.rm=T))
+  
+  predicted_probabilities[i, ] = p$median
+  p <- predict(bootstrap_model_sens$gam, newdata = new_data, type = "response")
+  p = data.frame(cbind(p, new_data$time, new_data$intervention.text))
+  names(p) = c("prob","time", "intervention.text")
+  p = p %>% group_by(time,intervention.text) %>% summarise(
+    median = median(as.numeric(prob), na.rm=T))
+  predicted_probabilities_sens[i, ] = p$median
+  
+  
+  print(i)
+}
+
+# Calculate confidence intervals using empirical quantiles
+estimate <- apply(predicted_probabilities, 2, quantile, probs = 0.50,na.rm=T)
+lower_bound <- apply(predicted_probabilities, 2, quantile, probs = 0.025,na.rm=T)
+upper_bound <- apply(predicted_probabilities, 2, quantile, probs = 0.975,na.rm=T)
+
+acq_probs = data.frame(cbind(estimate,lower_bound,upper_bound)) 
+acq_probs
+
+# Calculate confidence intervals using empirical quantiles
+estimate_s <- apply(predicted_probabilities_sens, 2, quantile, probs = 0.50,na.rm=T)
+lower_bound_s <- apply(predicted_probabilities_sens, 2, quantile, probs = 0.025,na.rm=T)
+upper_bound_s <- apply(predicted_probabilities_sens, 2, quantile, probs = 0.975,na.rm=T)
+
+acq_probs_s = data.frame(cbind(estimate_s,lower_bound_s,upper_bound_s)) 
+acq_probs_s
+
+# Calculate the OR of the prediction probabilities
+data_pred = data.frame(predicted_probabilities)
+names(data_pred) = c("R1_control","R1_int","R2_control","R2_int","R3_control","R3_int")
+data_pred_s = data.frame(predicted_probabilities_sens)
+names(data_pred_s) = c("R1_control","R1_int","R2_control","R2_int","R3_control","R3_int")
+
+OR_pred1 = data_pred$R1_int/data_pred$R1_control
+OR_pred2 = (data_pred$R2_int/data_pred$R2_control)
+OR_pred3 = (data_pred$R3_int/data_pred$R3_control)
+OR_pred1_s = data_pred_s$R1_int/data_pred_s$R1_contol
+OR_pred2_s = (data_pred_s$R2_int/data_pred_s$R2_control)
+OR_pred3_s = (data_pred_s$R3_int/data_pred_s$R3_control)
+
+OR_estimate1 <-quantile(OR_pred1, probs = 0.50,na.rm=T)
+OR_lower_bound1 <- quantile(OR_pred1, probs = 0.025,na.rm=T)
+OR_upper_bound1 <- quantile(OR_pred1, probs = 0.975,na.rm=T)
+
+OR_estimate1 <-quantile(OR_pred1, probs = 0.50,na.rm=T)
+OR_lower_bound1 <- quantile(OR_pred1, probs = 0.01,na.rm=T)
+OR_upper_bound1 <- quantile(OR_pred1, probs = 0.99,na.rm=T)
+
+OR_estimate2 <-quantile(OR_pred2, probs = 0.50,na.rm=T)
+OR_lower_bound2 <- quantile(OR_pred2, probs = 0.01,na.rm=T)
+OR_upper_bound2 <- quantile(OR_pred2, probs = 0.99,na.rm=T)
+
+OR_estimate3 <-quantile(OR_pred3, probs = 0.50,na.rm=T)
+OR_lower_bound3 <- quantile(OR_pred3, probs = 0.01,na.rm=T)
+OR_upper_bound3 <- quantile(OR_pred3, probs = 0.99,na.rm=T)
+
+OR_probs1 = data.frame(cbind(OR_estimate1,OR_lower_bound1,OR_upper_bound1)) 
+OR_probs2 = data.frame(cbind(OR_estimate2,OR_lower_bound2,OR_upper_bound2)) 
+OR_probs3 = data.frame(cbind(OR_estimate3,OR_lower_bound3,OR_upper_bound3)) 
+names(OR_probs1) = c("estimate", "lower", "upper")
+names(OR_probs2) = c("estimate", "lower", "upper")
+names(OR_probs3) = c("estimate", "lower", "upper")
+
+# Sensitivity analyses
+OR_estimate1_s <-quantile(OR_pred1_s, probs = 0.50,na.rm=T)
+OR_lower_bound1_s <- quantile(OR_pred1_s, probs = 0.025,na.rm=T)
+OR_upper_bound1_s <- quantile(OR_pred1_s, probs = 0.975,na.rm=T)
+
+OR_estimate2_s <-quantile(OR_pred2_s, probs = 0.50,na.rm=T)
+OR_lower_bound2_s <- quantile(OR_pred2_s, probs = 0.025,na.rm=T)
+OR_upper_bound2_s <- quantile(OR_pred2_s, probs = 0.975,na.rm=T)
+
+OR_estimate3_s <-quantile(OR_pred3_s, probs = 0.50,na.rm=T)
+OR_lower_bound3_s <- quantile(OR_pred3_s, probs = 0.025,na.rm=T)
+OR_upper_bound3_s <- quantile(OR_pred3_s, probs = 0.975,na.rm=T)
+
+OR_probs1_s = data.frame(cbind(OR_estimate1_s,OR_lower_bound1_s,OR_upper_bound1_s)) 
+OR_probs2_s = data.frame(cbind(OR_estimate2_s,OR_lower_bound2_s,OR_upper_bound2_s)) 
+OR_probs3_s = data.frame(cbind(OR_estimate3_s,OR_lower_bound3_s,OR_upper_bound3_s)) 
+names(OR_probs1_s) = c("estimate", "lower", "upper")
+names(OR_probs2_s) = c("estimate", "lower", "upper")
+names(OR_probs3_s) = c("estimate", "lower", "upper")
 
 
-# Resample the dataset and fit the model
-bootstrap_results_r3 <- replicate(100, {
-  # Sample with replacement
-  bootstrap_sample <- sample_n(dfls, size = nrow(dfls), replace = TRUE)
-  
-  # Fit the model on bootstrap sample
-  bootstrap_model <- glmer(esble-1 ~ intervention.text * factor(time) + (1 | menage_id_member), 
-                           data = bootstrap_sample,
-                           family = binomial)
-  
-  # Extract coefficients from the model
-  coef_intervention <- fixef(bootstrap_model)["intervention.textintervention"]
-  coef_interaction <- fixef(bootstrap_model)["intervention.textintervention:factor(time)3"]
-  
-  # Get the levels of time factor
-  time_levels <- levels(factor(bootstrap_sample$time))[3]
-  
-  # Calculate change in log odds for each level of time
-  log_odds_change <- calculate_log_odds_change(coef_intervention, coef_interaction)
-  
-  
-  return(log_odds_change)
-})
+OR_probs = rbind(OR_probs2,OR_probs2_s,OR_probs3,OR_probs3_s)
 
-bootstrap_results_r3
+row.names(OR_probs) = c("R2","R2 (sensitivity)", "R3", "R3 (sensitivity)")
 
-# Calculate confidence intervals
-boot_ci_r3 <- quantile(bootstrap_results_r3, c(0.025, 0.975))
-boot_ci_r3
+
+#acq_l = melt(acq_probs, values=row.names(acq_probs))
+
+# Plot the acquisition probabilities with confidence intervals
+p_or_pred = ggplot(OR_probs, aes(y=row.names(OR_probs), x=estimate)) + geom_point(size=5)+
+  geom_vline(xintercept = 1, linetype=2, col="red")+
+  geom_linerange(aes(xmin = lower, xmax = upper), 
+                 position = position_dodge(width = 0.2), size=1, linetype=c(1,2,1,2))+
+  theme_bw()+theme(
+    axis.text.x=element_text(size=12),
+    axis.title=element_text(size=12,face="bold"),
+    axis.text=element_text(size=12,face="bold"),
+    strip.text=element_text(size=12,face="bold")) +
+  xlim(0,1.5) + 
+  labs(title = "Odds Ratio ESBL-acquisition probability",
+       x = "Ratio intervention(t)/control(t)",
+       y = "") +
+  scale_y_discrete(breaks = c("R2","R2 (sensitivity)", "R3", "R3 (sensitivity)"),  # Set custom breaks
+                   labels = c(">3M",">3M (sensitivity)", 
+                              ">9M",">9M (sensitivity)" ))  # Set custom labels
+p_or_pred
+
+
+pdf("./Output/Figures/fit_plotOR_ratio.pdf", width=7,height = 5)
+print(p_or_pred)
+dev.off()
+
+################################################################
+# RANDOM-EFFECTS MODEL - Decolonisation
+################################################################
+
+# Fit odds ratios for R2 acquisitions only
+md2_r2 <- glmer(decolonisation ~ intervention.text + age + sexe + (1|menage_id), 
+                data=dfls2,  family = binomial(link = "logit"))
+summary(md2_r2)
+data.frame(exp(fixef(md2_r2)))
+exp(confint(md2_r2,method="Wald"))  # Effect intervention: OR = 0.99 (0.57 - 1.75); 
+# Fit odds ratios for R3 acquisitions only
+md2_r3 <- glmer(decolonisation ~ intervention.text + age + sexe + (1|menage_id), 
+                data=dfls3,  family = binomial(link = "logit"))
+summary(md2_r3)
+data.frame(exp(fixef(md2_r3)))
+exp(confint(md2_r3,method="Wald"))  # Effect intervention: OR = 1.10 (0.70 - 1.74); 
+
+
+# Now fit both together
+mds2 = gamm(decolonisation ~ age + sexe + intervention.text*factor(time) + 
+              s(as.numeric(month), bs="cc"),
+            random=list(village_name=~1, menage_id_member=~1), 
+            family=binomial(link = "logit"), data=d)
+
+summary(mds2$gam)
+exp(coef(mds2$gam))
+exp(confint(mds2$gam))
+
+################################################################
+# RANDOM-EFFECTS MODEL - Colonisation
+################################################################
+dfls = dfls %>% mutate(
+  intervention.inplace= ifelse(time%in%c(2,3)&intervention.text=="intervention","yes","no")
+)
+
+dfls0 = dfls0 %>% mutate(
+  intervention.inplace = ifelse(time%in%c(2,3)&intervention.text=="intervention","yes","no")
+)
+
+table(dfls$time,dfls$intervention.inplace)
+
+# Fit R0, R1, R2 and R3 together --> Then can calculate probability of infection at each time point
+m2 <- glmer(esble-1 ~ intervention.text*factor(time) + harmonic(month,1,12)  + age + sexe + (1|village_name/menage_id_member), data=dfls0,  family = binomial(link = "logit"))
+summary(m2)
+data.frame(exp(fixef(m2)))
+exp(confint(m2,method="Wald"))  # Effect intervention: OR = 
+
 
 ##############################################
 # MSM model
@@ -663,23 +1291,39 @@ Q[2, 1] <- rho
 diag(Q) <- -rowSums(Q)
 
 rownames(Q) <- colnames(Q) <- c("no_esbl", "esbl")
+Q
 crudeinits.msm(esble ~ days, menage_id_member, data=dfls, qmatrix=Q)
+
+incl = unique(dfls0$menage_id_member[dfls0$time==0])
+#dfls0$after = ifelse(dfls0$time==0, "no", "yes")
+du = dfls0 %>% filter(menage_id_member%in%incl) %>%
+  select(time,days,days2,month,rainy, intervention.text,intervention.start,village_name, menage_id, menage_id_member, age,sexe,esble, nesbl_tminus)
+du$intervention.start = ifelse(du$time==0, "control", du$intervention.text)
+table(du$time, du$intervention.start)
+
+du = du %>% filter(!menage_id_member=="EHL00002504-1")
+
+# add seasonal term
+harmonics <- data.frame(harmonic(du$month, 2, period = 12))
+names(harmonics) = c("harmonic_1","harmonic_2", "harmonic_3", "harmonic_4")
+du = cbind(du,harmonics)
 
 
 # Fit the multi-state model
 msm_fit <- msm(
-  formula = esble ~ days,          # Model formula
-  covariates = list("1-2" = ~factor(intervention.text)+nesbl_tminus, "2-1" = ~factor(intervention.text)),
+  formula = esble ~ days2,          # Model formula
+  covariates = list("1-2" = ~factor(intervention.start) + nesbl_tminus+age+sexe, 
+                    "2-1" = ~factor(intervention.start)),
   subject = menage_id_member,    # ID variable
-  data = dfls,                     # Dataset
+  data = du,                     # Dataset
   qmatrix = Q,                     # Transition intensity matrix
-  gen.inits = F
- # method = "BFGS"                  # Optimization method
+  gen.inits = T,                   # initial values generated by the model
+  method = "BFGS"                  # Optimization method
 )
 
 # Summarize the fitted model
 summary(msm_fit)
 
 qmatrix.msm(msm_fit)
-pmatrix.msm(msm_fit, t=max(dfls$days))
+pmatrix.msm(msm_fit, t=max(dfls0$days2))
 sojourn.msm(msm_fit)

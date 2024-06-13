@@ -12,9 +12,9 @@ Burkina Faso
   _> data > BF > Raw > Patient survey_
 
   _> data > BF > Clean > linked_final_
-  1) bf_hh_stool_all_r0123.xlsx               =
-  2) bf_esbl_stool_all_r0123.xlsx             =
-  3) bf_hh_stool_all_r0123_wide.xlsx          =
+  1) bf_hh_stool_all_r0123.csv               =
+  2) bf_esbl_stool_all_r0123.csv             =
+  3) bf_hh_stool_all_r0123_wide.csv          =
   
   _> data > BF > Clean > use_in_analyses_
   1) bf_esbl_wide_completecases.rda           = 
@@ -28,9 +28,9 @@ Democratic Republic of Congo
   _> data > DRC > Raw > Patient survey_
 
   _> data > DRC > Clean > linked_final_
-  1) humanALL_Kim_pseudo.xlsx                =
-  2) HHvisits_selles_R1R2R3.xlsx             =
-  3) rodent_merged.csv                       =
+  1) humanALL_Kim_pseudo.csv                =
+  2) HHvisits_selles_R1R2R3.csv             =
+  3) rodent_merged.csv                      =
   
   _> data > DRC > Clean > use_in_analyses_
 

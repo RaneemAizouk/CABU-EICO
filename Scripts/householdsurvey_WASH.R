@@ -1,7 +1,12 @@
 #################################################################
 # CLEAN HOUSEHOLD DATA
 #################################################################
-# Good to note is that the household data contains questions from three surveys
+# This code is cleaning the household WASH survey data 
+
+# 16 March 2025
+# Author: Esther van Kleef
+
+# The CABU-EICO household data contains questions from three surveys
 # 1) Stool collection survey --> individual-level data (age, sex) of those of whom a stool sample was taken
 # 2) WASH survey --> household level data, answered by the household head
 # 3) Healthcare utilisation survey --> individual level data
@@ -16,10 +21,89 @@
 # 3) Healthcare utilisation survey --> redcap_repeat_instrument == "visite_structure_sanitaire"
 # 4) Healthcare utilisation survey medicines --> redcap_repeat_instrument == "mdicament"
 
+rm(list=ls())
+
+# load package
+pacman::p_load(readxl, writexl, lubridate, zoo, ggplot2, tidyverse, Hmisc, stringr,lme4,reshape2, 
+               openxlsx, table1, flextable, magrittr, officer, msm, skimr)
+
+# SET DIRECTORY
+DirectoryData <- "./Data/BF/Raw"
+DirectoryDataOut <- "./Data/BF/clean"
+
+# Villages (that are the clusters) of CABU-EICO
+villages = readxl::read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
+names(villages) = c("village", "village_name","intervention_text","ajouter")
+
+# Lab data
+#car_bf = read.csv(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_2024-04-17_1527.csv"), sep=";")
+car_bf = readxl::read_xlsx(paste0(DirectoryData, "/householdsurvey/CABU_WP4_R0-R3.xlsx"))
+
+# Lab ids vs household ids
+hh_lab_ids =  readxl::read_xlsx(paste0(DirectoryData,"/Correspondande-Code_Lab-ID_Menage.xlsx"))
+names(hh_lab_ids)
+names(car_bf)
+names(hh_lab_ids) = c("household", "menage_id", "bras")
+
+# Add variables village and household to lab data
+car_bf$village = substr(car_bf$record_id, start = 1, stop = 2)
+car_bf$household = str_extract(car_bf$record_id, "[^-]+")
+car_bf = merge(car_bf, villages, by="village")
+
+############################################################
+# CLEAN LAB DATA
+############################################################
+
+# Clean germe; diameters are CLSI guidelines, 
+# Jan jacobs comm: ESBL positive is defined as cetriax/cefo <=22 (including I and R, based on CLSI guidelines,
+# See in WP6 folder "word file: Interpretation antibiogramme des isolats PORTAGE asymptomatique_ESBL_E. coliKlebsielle.docx), 
+# So I understood to use this, instead of esbltest == 1 
+# This is then interpreted as, cetriax/cefo resistant following ESBL selective medium)
 
 # ALL ROUNDS
+####################
+unique(car_bf$germe)
+car_bf = car_bf %>%
+  mutate(germe_c = ifelse(germe %in% c("E.COLI", "E-COLI", "ECOLI", "E.COLI 2", "E.COLI 1", "eE-COLI",
+                                       "E-COLI 2","E-CLI","E-CLOI", "E.COLIE","1"),"e.coli", 
+                          ifelse(germe %in% c("SALMO", "SALMO SPP", "SALMONELLA SP","SALMONELLA SPP","SALMONELLE SPP","SALMONELLA SSP",
+                                              "SALMONELLA", "SELMO"),"salmonella",NA)),
+         germe_c = ifelse(morphotyp%in%c(1, NA),germe_c, 
+                          paste0(germe_c, "_", morphotyp)),
+         esbl_pos = ifelse(diametr_cetriax_or_cefota <= 22, 1, 0),
+         date = as.Date(date, format="%d/%m/%Y"),
+         date_conserv = as.Date(date, format="%d/%m/%Y")) 
+
+
+
+table(car_bf$germe, car_bf$germe_c, useNA= "always") # 7 individuals with no germe indicated, make NA again
+car_bf$germe_c[car_bf$germe==""] = NA
+table(car_bf$germe, car_bf$germe_c, useNA= "always")
+
+# Number of cases positive
+table(car_bf$germe_c, car_bf$esbl_pos)
+table(car_bf$esbl_pos, useNA="always") # These are the ESBL positive patients based on cetriax_or_cefota, 2842
+table(car_bf$testesbl) # These are the ESBL positive patients based on esbl_pos, 2842
+table(car_bf$esbl_pos==1 & car_bf$testesbl==1) # difference; we decided to ignore these differences
+
+# Remove individuals with diametr_cetriax_or_cefota = NA
+car_bf = car_bf %>% filter(!is.na(diametr_cetriax_or_cefota)) # 4 removed
+table(car_bf$esbl_pos, useNA="always") # These are the ESBL positive patients based on cetriax_or_cefota, 2507; Update: 16 March 2025 this is 2842
+
+names(car_bf)
+
+# Household data
+#hh_bf = readxl::read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUBWP4_DATA_2024-04-17_1528.xlsx"))
+hh_bf = readxl::read_xlsx(paste0(DirectoryData, "/householdsurvey/CABUWASH_DATA_2024-06-27_R0&R3.xlsx"))
+
+
+#-------------------------------------------------------------------------------
+# HOUSEHOLD SURVEY - WASH INDICATORS
+#-------------------------------------------------------------------------------
+
+# BURKINA FASO - ALL ROUNDS
 ################################
-hh_bf = hh_bf %>% mutate(
+d = hh_bf %>% mutate(
   dob = as.Date(dob, format = "%Y-%m-%d"),
   sexe = factor(sexe, levels=c(1,2), labels=c("Male", "Female")),
   date_enquete = as.Date(date_enquete, format="%Y-%m-%d"),
@@ -31,6 +115,10 @@ hh_bf = hh_bf %>% mutate(
                 breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, Inf),
                 labels = c("0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70-79", "80-89", "90+"),
                 include.lowest = TRUE),
+  agegr = cut(age,
+              breaks = c(0, 5, 18, 50, Inf),
+              labels = c("0-4", "5-17", "18-49", "50+"),
+              include.lowest = TRUE),
   nmbre_personne_menage = as.numeric(nmbre_personne_menage),
   nbre_enf_0_5ans = as.numeric(nbre_enf_0_5ans),
   nbre_menage_conc = as.numeric(nbre_menage_conc), 
@@ -64,7 +152,7 @@ hh_bf = hh_bf %>% mutate(
                                                                                              "Tap public/fountain", 
                                                                                              "Borehole",
                                                                                              "improved well (protected)",
-                                                                                             "unimproved well(unprotected)",
+                                                                                             "unimproved well (unprotected)",
                                                                                              "rainwater",
                                                                                              "surface water (ponds, dams,rivers,lakes,pits,irrigation canals)",
                                                                                              "bagged water", "bottled water")),  
@@ -94,7 +182,8 @@ hh_bf = hh_bf %>% mutate(
   q14_produit_lavag_main = factor(q14_produit_lavag_main, levels=c(1:5), labels=c("Yes, soap", "Yes, detergent", "Yes, ash/mud/sand", "No, none available", "No, available but not used")),
   q15_lave_apr_defec = factor(q15_lave_apr_defec, levels=c(1:4), labels=c("Yes, always", "Yes, often", "No or rarerly", "Not sure")),       
   q16_lave_apr_repas = factor(q16_lave_apr_repas, levels=c(1:4), labels=c("Yes, always", "Yes, often", "No or rarerly", "Not sure")),
-  q17_animaux_menage = factor(q17_animaux_menage, levels=c(1:4), labels = c("Yes, inside and outside", "Yes, outside next to house","Yes, outside in demarked area", "No")),          
+  q17_animaux_menage = factor(q17_animaux_menage, levels=c(1:4), labels = c("Yes, inside and outside", "Yes, outside next to house","Yes, outside in demarked area", "No")),  
+  q20_excrement_animaux = factor(q20_excrement_animaux, levels=c(1:3), labels=c("Yes", "No", NA)),
   # q18_animaux_interieur___1 = factor(q18_animaux_interieur___1, levels = c(0,1), labels = c("No", "Yes")),
   # q18_animaux_interieur___2 = factor(q18_animaux_interieur___2, levels = c(0,1), labels = c("No", "Yes")),       
   # q18_animaux_interieur___3 = factor(q18_animaux_interieur___3, levels = c(0,1), labels = c("No", "Yes")),
@@ -115,7 +204,7 @@ hh_bf = hh_bf %>% mutate(
   # q21_animal_malade___4 = factor(q21_animal_malade___4, levels = c(0,1), labels = c("No", "Yes")),  
   # q21_animal_malade___5 = factor(q21_animal_malade___5, levels = c(0,1), labels = c("No", "Yes")),             
   # q21_animal_malade___6 = factor(q21_animal_malade___6, levels = c(0,1), labels = c("No", "Yes")),
-  eau_assainissement_hygine_complete = factor(eau_assainissement_hygine_complete, levels=c(0,2), labels=c("No", "Yes")),
+  #eau_assainissement_hygine_complete = factor(eau_assainissement_hygine_complete, levels=c(0,2), labels=c("No", "Yes")),
   piam_q1 = as.numeric(piam_q1),
   piam_q2a = as.numeric(piam_q2a),
   piam_q2b = factor(piam_q2b, levels=c(1,2), labels=c("Male", "Female")),
@@ -150,7 +239,9 @@ hh_bf = hh_bf %>% mutate(
   q5b.cans.storage.water.closed.wen.empty= "q5b_bidon_ferme_vide",          
   q5c.cans.cleaned.before.reuse= "q5c_bidon_nettoye", 
   q6.treatment.water= "q6_traite_eau", 
+  q6.traitmen.water.other = "q6_autre_traitmen_eau",
   q7.principle.defication= "q7_type_inst_sanitaire", 
+  q7.principle.defication.other = "q7_autr_typ_ins_sanitair",
   q8.other.defecation.flush.toiled.septic  = "q8_autr_lieu_defecation___1", 
   q8.other.defecation.pit.latrine.ventilation = "q8_autr_lieu_defecation___2",
   q8.other.defecation.pit.latrine.slab = "q8_autr_lieu_defecation___3",   
@@ -158,11 +249,14 @@ hh_bf = hh_bf %>% mutate(
   q8.other.defecation.open.defecation = "q8_autr_lieu_defecation___5",   
   q8.other.defecation.other = "q8_autr_lieu_defecation___6",
   q8.other.defecation.none = "q8_autr_lieu_defecation___7",
+  q8.other.defecation.specified = "q8_autre_preciser",
   q9.shared.toilet= "q9_toilette_partagee",
   q10.n.shared.toilet= "q10_combien_partag",
   q11.toilet.last.cleaned= "q11_dernier_nettoyage",
   q12.disposal.child.stool= "q12_elimine_selle_enf",
+  q12.disposal.child.other.specified = "q12_autre_preciser",
   q13.disposal.latrine.pit= "q13_vidange_toilette",
+  q13.latrine.pit.other.specified = "q13_autre_preciser",
   q14.handwashing.product= "q14_produit_lavag_main",
   q15.handwashing.defecation= "q15_lave_apr_defec",
   q16.handwashing.meals= "q16_lave_apr_repas",
@@ -173,12 +267,14 @@ hh_bf = hh_bf %>% mutate(
   q18.animal.inside.donkey.horse = "q18_animaux_interieur___4",       
   q18.animal.inside.chicken.goose.duck = "q18_animaux_interieur___5",
   q18.animal.inside.other = "q18_animaux_interieur___6",
+  q18_animal.inside.other.specified = "q18_autre_specifie",
   q19.animal.outside.cow = "q19_animaux_dehors___1",
   q19.animal.outside.sheep.goat = "q19_animaux_dehors___2",       
   q19.animal.outside.pig = "q19_animaux_dehors___3",
   q19.animal.outside.donkey.horse = "q19_animaux_dehors___4",       
   q19.animal.outside.chicken.goose.duck = "q19_animaux_dehors___5",
   q19.animal.outside.other = "q19_animaux_dehors___6",
+  q19.animal.outside.other.specified = "q19_autre_specifie",
   q20.animal.excrement.floor= q20_excrement_animaux, 
   q21.when.animal.ill.treatment.with.vet = "q21_animal_malade___1",           
   q21.when.animal.ill.treatment.without.vet= "q21_animal_malade___2",  
@@ -209,32 +305,130 @@ hh_bf = hh_bf %>% mutate(
   piam.q6.freq.partic.defication.public= "piam_q6h"
 )
 
-table(hh_bf$agegr10)
+table(d$agegr10)
+table(d$agegr)
+names(d)
 
 # Link village and cluster data to household survey
-hh_bf$data_row = c(1:nrow(hh_bf)) # This variable we can use for identifying back those individuals that had a sample taken
-hh_bf$village = substr(hh_bf$menage_id, start = 1, stop = 2)
-hh_bf = merge(hh_bf, villages, by="village")
-names(hh_bf)
+d$data_row = c(1:nrow(d)) # This variable we can use for identifying back those individuals that had a sample taken
+d$village = substr(d$menage_id, start = 1, stop = 2)
+d = merge(d, villages, by="village")
+names(d)
 
-names(hh_bf) = gsub("_",".",names(hh_bf))
-hh_bf = hh_bf %>%
+names(d) = gsub("_",".",names(d))
+d = d %>%
   rename(menage_id = "menage.id",
          village_name = "village.name",
          redcap_event_name = "redcap.event.name")
+
+
+#-------------------------------------------------------------------------------
+# DEFINE BINARY WASH INDICATORS
+#-------------------------------------------------------------------------------
+# 1) Access to/use of safe drinking water
+# 2) Cleaning drinking water storage --> if q4 = Yes, cans; Yes, only one large tank, then q5a, q5b and q5c are filled out. Turns out only 3 have no for this question so can just use q5c
+# 3) Correct hand washing --> q14 soap available + q15 hand washing after defecation 
+# 4) Access/use of improved sanitation facility
+# 5) Livestock animal access to the house
+# 6) Animal excrement on the floor
+
+
+# Some background
+#---------------------------------------------------------
+
+# Correct handwashing
+# Opted for the less strict approach to only define handwashing with soap, detergent, and ash as correct.
+# In certain places, including DRCongo, hand washing with powder/liquid is common place and considered correct.
+# Handwashing with ash is disputable (upon a quick search, this Cochrane review (Cochrane did not find conclusive evidence),
+# but this is promoted under extreme humanitarian conditions (including south sudan), 
+# probably less effective than soap. Quickly searching online, this RCT suggests the same. https://bmjopen.bmj.com/content/12/5/e056411
+# would suggest we consider combining all forms of handwashing vs not.
+# Then in a separate sensitivity analyses we could have handwashing with soap vs all other categories. 
+# Why so many handwashing missing?
+table(d$q15.handwashing.defecation, useNA="always") # Q15 was only asked if q14 was answered with yes
+table(d$q14.handwashing.product, useNA="always") 
+table(d$q14.handwashing.product,d$q15.handwashing.defecation, useNA="always")
+
+
+# Improved sanitation
+#1.	Divide improved sanitation in improved vs unimproved. Then for unimproved
+# a.	First check Q9 if answer to shared toilet = yes, if yes, then also classify as unimproved
+# b.	Pit latrine without slab counts officially as unimproved, not improved (although in practice the difference to exposure risk is likely limited).
+# In contrast to the formal classification, one argumentation could be that what matters most is whether there is some form of disposal vs open defecation.
+# However, for now, keep to strick definition
+table(d$q14.handwashing.product)
+table(d$q15.handwashing.defecation)
+table(d$q9.shared.toilet)
+
+#dt = rbind(d_wash, d_wash_r2) 
+
+d <- d %>% 
+  mutate(main.drinking.water.dry.binary = case_when(
+    q2.main.water.source.dry %in%c("Tap house", "Tap concession","Tap public/fountain",
+                                   "Borehole", "improved well (protected)","rainwater","bottled water") ~ "Improved",
+    q2.main.water.source.dry %in%c("surface water (ponds, dams,rivers,lakes,pits,irrigation canals)", "unimproved well (unprotected)",
+                                   "bagged water") ~ "Unimproved",
+    TRUE ~ NA),
+    main.drinking.water.rainy.binary = case_when(
+      q3.main.water.source.rainy %in%c("Tap house", "Tap concession","Tap public/fountain",
+                                       "Borehole", "improved well (protected)","rainwater","bottled water") ~ "Improved",
+      q3.main.water.source.rainy %in%c("surface water (ponds, dams,rivers,lakes,pits,irrigation canals)", "unimproved well (unprotected)",
+                                       "bagged water") ~ "Unimproved",
+      TRUE ~ NA),
+    cleaning.water.storage.binary = case_when(
+      q5c.cans.cleaned.before.reuse %in% c("Yes, with soap","Yes, with water but no soap","Yes, boiled","Other") ~ "Yes",
+      q5c.cans.cleaned.before.reuse %in% c("No") ~ "No",
+      TRUE ~ NA 
+    ),
+    correct.handwashing.binary = case_when(
+      q15.handwashing.defecation %in% c("Yes, always","Yes, often") & q14.handwashing.product %in% c("Yes, soap", "Yes, detergent","Yes, ash/mud/sand") ~ "Yes",
+      q15.handwashing.defecation %in% c("No or rarerly","Not sure") | q15.handwashing.defecation %in% c("Yes, always","Yes, often")
+      & q14.handwashing.product %in% c("No, none available", "No, available but not used")| !q14.handwashing.product %in% c("Yes, soap", "Yes, detergent","Yes, ash/mud/sand") ~ "No",
+      TRUE ~ NA
+    ),
+    improved.sanitation.binary = case_when(
+      q9.shared.toilet %in% c("Yes, public")|
+        q7.principle.defication %in% c("pit latrine without slab","open defecation") ~ "No",
+      q7.principle.defication %in% c("pit latrine with slab") &q9.shared.toilet %in% c("No","Yes, other households (non-public)") ~ "Yes",
+      TRUE ~ NA
+    ),
+    livestock.access.house.binary = case_when(
+      q17.animals.around.household %in%c("Yes, inside and outside") ~ "Yes",
+      q17.animals.around.household %in%c("Yes, outside next to house","Yes, outside in demarked area", "No") ~ "No",
+      TRUE ~ NA
+    ),
+    animal.excrement.floor.binary = factor(q20.animal.excrement.floor, levels=c("No","Yes"))
+  )
+
+table(d$main.drinking.water.dry.binary, useNA="always")
+table(d$main.drinking.water.rainy.binary, useNA="always")
+table(d$cleaning.water.storage.binary, useNA="always")
+table(d$correct.handwashing.binary, useNA="always")
+d$correct.handwashing.binary = ifelse(is.na(d$q14.handwashing.product), NA, d$correct.handwashing.binary)
+
+table(d$improved.sanitation.binary, useNA="always")
+table(d$livestock.access.house.binary, useNA="always")
+table(d$animal.excrement.floor.binary, useNA="always")
 
 # Select relevant WASH variables from the household survey
 ################################################################################################
 
 # variables excluding healthcare seeking behaviour survey questions (and related medicine use); as these
 # are not 1 observation per household
-hh_bf_wash = hh_bf %>% select(data.row,menage_id,village, village_name, intervention.text,   
+d_wash = d %>% select(data.row,menage_id,village, village_name, intervention.text,   
                               redcap_event_name,
                               date.enquete,
                               groupe,
                               n.householdmember, 
                               n.child.0to5,
                               n.households.concession,
+                              main.drinking.water.dry.binary,
+                              main.drinking.water.rainy.binary, 
+                              cleaning.water.storage.binary,
+                              correct.handwashing.binary,
+                              improved.sanitation.binary,
+                              livestock.access.house.binary,
+                              animal.excrement.floor.binary,                             
                               q1.diar.prev.water.pot.covered,
                               q1.diar.prev.no.finger.in.waterglass,                    
                               q1.diar.prev.utensil.to.take.water.from.pot, q1.diar.prev.cover.food,                                  
@@ -244,29 +438,29 @@ hh_bf_wash = hh_bf %>% select(data.row,menage_id,village, village_name, interven
                               q2.main.water.source.dry, q3.main.water.source.rainy,                              
                               q4.cans.storage.water, q5a.cans.storage.water.closed.when.filled,                                   
                               q5b.cans.storage.water.closed.wen.empty, q5c.cans.cleaned.before.reuse,                                        
-                              q6.treatment.water, q6.autre.traitmen.eau,                                    
-                              q7.principle.defication, q7.autr.typ.ins.sanitair,                                 
+                              q6.treatment.water, q6.traitmen.water.other,                                    
+                              q7.principle.defication, q7.principle.defication.other,                                 
                               q8.other.defecation.flush.toiled.septic, q8.other.defecation.pit.latrine.ventilation,             
                               q8.other.defecation.pit.latrine.slab, q8.other.defecation.pit.latrine.no.slab,                  
                               q8.other.defecation.open.defecation, q8.other.defecation.other,                                
-                              q8.other.defecation.none, q8.autre.preciser,                                        
+                              q8.other.defecation.none, q8.other.defecation.specified,                                        
                               q9.shared.toilet, q10.n.shared.toilet,                                       
                               q11.toilet.last.cleaned, q12.disposal.child.stool,                                    
-                              q12.autre.preciser, q13.disposal.latrine.pit,                                     
-                              q13.autre.preciser, q14.handwashing.product,                                   
+                              q12.disposal.child.other.specified, q13.disposal.latrine.pit,                                     
+                              q13.latrine.pit.other.specified, q14.handwashing.product,                                   
                               q15.handwashing.defecation, q16.handwashing.meals,                                       
                               q17.animals.around.household, q18.animal.inside.cow,                                    
                               q18.animal.inside.sheep.goat, q18.animal.inside.pig,                                    
                               q18.animal.inside.donkey.horse, q18.animal.inside.chicken.goose.duck,                     
-                              q18.animal.inside.other,q18.autre.specifie,                                       
+                              q18.animal.inside.other,q18.animal.inside.other.specified,                                       
                               q19.animal.outside.cow, q19.animal.outside.sheep.goat,                             
                               q19.animal.outside.pig,q19.animal.outside.donkey.horse,                           
                               q19.animal.outside.chicken.goose.duck, q19.animal.outside.other,                                  
-                              q19.autre.specifie, q20.animal.excrement.floor,                                    
+                              q19.animal.outside.other.specified, q20.animal.excrement.floor,                                    
                               q21.when.animal.ill.treatment.with.vet, q21.when.animal.ill.treatment.without.vet,                
                               q21.when.animal.ill.sell.bucher,q21.when.animal.ill.slaugter.eat.at.home,                     
                               q21.when.animal.ill.dies.burie.dispose,q21.when.animal.ill.dies.eat.at.home,                                
-                              eau.assainissement.hygine.complete,
+                              #eau.assainissement.hygine.complete,
                               piam.q1.n.athome.when.survey,
                               piam.q2a.athome.age.random.selected.person,
                               piam.q2a.athome.sex.random.selected.person,
@@ -290,7 +484,7 @@ hh_bf_wash = hh_bf %>% select(data.row,menage_id,village, village_name, interven
                               piam.q6.freq.partic.defication.public) %>%
   filter(!is.na(date.enquete)) # Denominator data (i.e. people tested for esbl) for R0
 
-hh_bf_wash_r3 = hh_bf %>% filter(is.na(redcap.repeat.instrument) & redcap_event_name=="round_3_arm_1") %>%
+d_wash_r2 = d %>% filter(is.na(redcap.repeat.instrument) & redcap_event_name=="round_3_arm_1") %>%
   select(data.row,menage_id,village, village_name, intervention.text,   
          redcap_event_name,
          date.enquete,
@@ -298,6 +492,13 @@ hh_bf_wash_r3 = hh_bf %>% filter(is.na(redcap.repeat.instrument) & redcap_event_
          n.householdmember, 
          n.child.0to5,
          n.households.concession,
+         main.drinking.water.dry.binary,
+         main.drinking.water.rainy.binary, 
+         cleaning.water.storage.binary,
+         correct.handwashing.binary,
+         improved.sanitation.binary,
+         livestock.access.house.binary,
+         animal.excrement.floor.binary,
          q1.diar.prev.water.pot.covered,
          q1.diar.prev.no.finger.in.waterglass,                    
          q1.diar.prev.utensil.to.take.water.from.pot, q1.diar.prev.cover.food,                                  
@@ -307,29 +508,29 @@ hh_bf_wash_r3 = hh_bf %>% filter(is.na(redcap.repeat.instrument) & redcap_event_
          q2.main.water.source.dry, q3.main.water.source.rainy,                              
          q4.cans.storage.water, q5a.cans.storage.water.closed.when.filled,                                   
          q5b.cans.storage.water.closed.wen.empty, q5c.cans.cleaned.before.reuse,                                        
-         q6.treatment.water, q6.autre.traitmen.eau,                                    
-         q7.principle.defication, q7.autr.typ.ins.sanitair,                                 
+         q6.treatment.water, q6.traitmen.water.other,                                    
+         q7.principle.defication, q7.principle.defication.other,                                 
          q8.other.defecation.flush.toiled.septic, q8.other.defecation.pit.latrine.ventilation,             
          q8.other.defecation.pit.latrine.slab, q8.other.defecation.pit.latrine.no.slab,                  
          q8.other.defecation.open.defecation, q8.other.defecation.other,                                
-         q8.other.defecation.none, q8.autre.preciser,                                        
+         q8.other.defecation.none, q8.other.defecation.specified,                                        
          q9.shared.toilet, q10.n.shared.toilet,                                       
          q11.toilet.last.cleaned, q12.disposal.child.stool,                                    
-         q12.autre.preciser, q13.disposal.latrine.pit,                                     
-         q13.autre.preciser, q14.handwashing.product,                                   
+         q12.disposal.child.other.specified, q13.disposal.latrine.pit,                                     
+         q13.latrine.pit.other.specified, q14.handwashing.product,                                   
          q15.handwashing.defecation, q16.handwashing.meals,                                       
          q17.animals.around.household, q18.animal.inside.cow,                                    
          q18.animal.inside.sheep.goat, q18.animal.inside.pig,                                    
          q18.animal.inside.donkey.horse, q18.animal.inside.chicken.goose.duck,                     
-         q18.animal.inside.other,q18.autre.specifie,                                       
+         q18.animal.inside.other,q18.animal.inside.other.specified,                                       
          q19.animal.outside.cow, q19.animal.outside.sheep.goat,                             
          q19.animal.outside.pig,q19.animal.outside.donkey.horse,                           
          q19.animal.outside.chicken.goose.duck, q19.animal.outside.other,                                  
-         q19.autre.specifie, q20.animal.excrement.floor,                                    
+         q19.animal.outside.other.specified, q20.animal.excrement.floor,                                    
          q21.when.animal.ill.treatment.with.vet, q21.when.animal.ill.treatment.without.vet,                
          q21.when.animal.ill.sell.bucher,q21.when.animal.ill.slaugter.eat.at.home,                     
          q21.when.animal.ill.dies.burie.dispose,q21.when.animal.ill.dies.eat.at.home,                                
-         eau.assainissement.hygine.complete,
+         #eau.assainissement.hygine.complete,
          piam.q1.n.athome.when.survey,
          piam.q2a.athome.age.random.selected.person,
          piam.q2a.athome.sex.random.selected.person,
@@ -351,11 +552,10 @@ hh_bf_wash_r3 = hh_bf %>% filter(is.na(redcap.repeat.instrument) & redcap_event_
          piam.q6.freq.partic.abx.use.adhoc,
          piam.q6.freq.partic.defication.adhoc,
          piam.q6.freq.partic.defication.public) 
-# Denominator data (i.e. people tested for esbl) for R3
+# Denominator data (i.e. people tested for esbl) for r2
 
-
-hh_bf_wash_r3 = merge(hh_bf_wash_r3, hh_bf_wash %>% select(menage_id, n.householdmember,n.child.0to5, n.households.concession), by="menage_id",all.x=T) 
-hh_bf_wash_r3 = hh_bf_wash_r3 %>%
+d_wash_r2 = merge(d_wash_r2, d_wash %>% select(menage_id, n.householdmember,n.child.0to5, n.households.concession), by="menage_id",all.x=T) 
+d_wash_r2 = d_wash_r2 %>%
   mutate(n.householdmember.x = n.householdmember.y,
          n.child.0to5.x = n.child.0to5.y,
          n.households.concession.x = n.households.concession.y) %>%
@@ -363,3 +563,328 @@ hh_bf_wash_r3 = hh_bf_wash_r3 %>%
   rename(n.householdmember = "n.householdmember.x",
          n.child.0to5 = "n.child.0to5.x",
          n.households.concession ="n.households.concession.x")
+
+table(d_wash$redcap_event_name)
+
+# Check if any of the 'other' categories needs merging
+#---------------------------------------------------------------------
+describe(d_wash) # All the 'other' categories have missing observations, so these could be deleted
+describe(d_wash_r2) # All the 'other' categories have missing observations, so these could be deleted
+
+d_wash = d_wash %>% select(-c(autr.mesur.prev.diarrhe, q6.traitmen.water.other, q7.principle.defication.other,     
+                                       q8.other.defecation.specified, q13.latrine.pit.other.specified, q18.animal.inside.other.specified,
+                                      q19.animal.outside.other.specified))
+
+d_wash_r2 = d_wash_r2 %>% select(-c(autr.mesur.prev.diarrhe, q6.traitmen.water.other, q7.principle.defication.other,     
+                                      q8.other.defecation.specified, q13.latrine.pit.other.specified, q18.animal.inside.other.specified,
+                                      q19.animal.outside.other.specified))
+
+skim(d_wash)
+skim(d_wash_r2)
+
+# CHECK FOR DUPLICATES
+# R1
+length(unique(d_wash$menage_id))
+sort(table(d_wash$menage_id, useNA="always")) # 1 duplicate, i.e. EKA00002004
+#View(d_wash[d_wash$menage_id=="EKA00002004",]) # Answers not the same, but remove 1
+d_wash = d_wash %>% filter(!duplicated(menage_id)) # 808 unique households
+ 
+names(hh_bf)
+
+# R2
+length(unique(d_wash_r2$menage_id))
+sort(table(d_wash_r2$menage_id, useNA="always")) # 1 duplicate, i.e. EKA00002004
+#View(d_wash_r2[d_wash_r2$menage_id=="EKA00002004",]) # All answers the same, except for hh size; remove 1
+
+d_wash_r2 = d_wash_r2 %>% filter(!duplicated(menage_id)) # 776 unique households
+
+
+#-------------------------------------------------------------------------------
+# HOUSEHOLD SURVEY - INDIVIDUAL CHARACTERISTICS
+#-------------------------------------------------------------------------------
+
+# ALL ROUNDS
+###################################################################################
+
+# Link lab data with lab vs hh survey ids (as IDs are in different format)
+car_bf = left_join(car_bf, hh_lab_ids, by="household")
+# Check if all linked
+table(car_bf$bras, useNA= "always")
+
+# Link lab data with hh survey ids
+length(unique(car_bf$menage_id)) # 261
+length(unique(d$menage_id)) # 808
+
+# Can all IDs be traced back from lab to wash survey?
+car_bf$found_in_hh[which(car_bf$menage_id %in% hh_bf$menage_id)] = 1
+car_bf$found_in_hh[is.na(car_bf$found_in_wash)] = 0
+length(unique(car_bf$household[car_bf$found_in_wash==0])) # after cleaning, all households can be found in WASH survey database; 
+unique(car_bf$menage_id[car_bf$found_in_wash==0])
+unique(car_bf$household[car_bf$found_in_wash==0])
+
+
+# Make dataset with only those household individuals that had a stool sample taken and their individual variables
+d_lab = d %>% filter(!is.na(cs.id.individu)) %>% # ensure just 1 observation per person of whom individual is esbl positive
+  select(data.row, redcap_event_name,cs.id.individu,num.echantillon, menage_id, village, age, agegr10, sexe, date.consent, date.stool.collection)
+
+# Merge wash patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
+which(car_bf$record_id %in% unique(d_lab$cs.id.individu)) # Have to change the format of both to make sure matching can be done
+head(car_bf$record_id ); head(d_lab$cs.id.individu)
+unique(car_bf$record_id)
+unique(d$cs.id.individu)
+
+#--------------------------------------------------------------------------------------------
+# ENABLE LINKAGE BETWEEN LAB DATA AND HH DATA BY ADAPTING THE IDs TO THE SAME FORMAT
+#--------------------------------------------------------------------------------------------
+# HH database does no have "-" and puts and "M" before each household member. Also sometimes 01 and sometimes 1 as method of writing
+# PROBABLY IF WE TAKE FROM wash_r0 cs_id_individue all "MX" (so M + number after ID), then put that in a seperate column.
+# Then we take the household number from the WASH survey (so menage_id), combine these to with a hyphen
+
+# THEN for car_bf we take also menage_Id and digits after the "-", remove the 0's then two can be combined
+
+# Change IDs to the same format
+
+# Create a variable in which we will safe the new formatted and cleaned ID
+d_lab$menage_id_member = NA
+
+# Create a variable that will just store the household member number
+d_lab$member = NA
+
+# Extract the number after M to get household number
+d_lab$member =  gsub(".*M", "", d_lab$cs.id.individu)
+# Remove leading '0's
+d_lab$member = as.character(as.numeric(d_lab$member))
+# Check the one's which are now NA
+table(is.na(d_lab$member))
+d_lab$cs.id.individu[is.na(d_lab$member)] # 22 individuals have a household member number missing, see if still all lab_ids can be linked when merging with car_bf
+#View(wash_r0_lab[is.na(wash_r0_lab$member),])
+d_lab$num.echantillon[is.na(d_lab$member)] # of 0 we can get them from num_echantillon
+
+# Now create new variable for linking with lab dataset
+d_lab$menage_id_member = paste0(d_lab$menage_id, "-", d_lab$member)
+d_lab$menage_id_member
+# Make NAs for the one's that still need checking
+d_lab$menage_id_member[is.na(d_lab$member)] = NA
+table(is.na(d_lab$menage_id_member))
+
+
+# Check if duplicates from wash_r0
+table(duplicated(d_lab$menage_id_member)) # 3018 duplicates (as multiple rounds of data)
+dups = unique(d_lab$menage_id_member[duplicated(d_lab$menage_id_member)]) # 1157
+#View(wash_bf_lab[which(wash_bf_lab$menage_id_member%in%dups),])
+
+# Reorder variables
+new_order <- c("data.row", "redcap_event_name", "village", "cs.id.individu", 
+               "num.echantillon", "menage_id_member", "member", "menage_id",
+               "date.consent", "date.stool.collection",
+               "age", "agegr10", "sexe")
+
+# Check if all columns exist
+setdiff(new_order, names(d_lab))  # Shows any missing columns
+
+d_lab <- d_lab[, new_order]  
+
+# Then for remainder keep first record 
+d_lab_de = d_lab %>% filter(!duplicated(menage_id_member))  # 1237
+table(duplicated(d_lab_de$menage_id_member)) # 
+table(d_lab_de$redcap_event_name) # 1191 individuals in round 0, new ones: 21 (round 1); 18 (round 2); 7 (round 3)
+
+
+# Now create the same variable for the lab dataset
+# Create a variable in which we will safe the new formatted and cleaned ID
+car_bf$menage_id_member = NA
+
+# Create a variable that will just store the household member number
+car_bf$member = NA
+
+# Extract the number after M to get household number
+car_bf$member =  gsub(".*-", "", car_bf$record_id)
+# Remove leading '0's
+car_bf$member = as.character(as.numeric(car_bf$member))
+# Check the one's which are now NA
+table(is.na(car_bf$member))
+car_bf$record_id[is.na(car_bf$member)] # 43 individuals have a household member number after M
+car_bf$member[is.na(car_bf$member)] =  gsub(".*M", "", car_bf$record_id[is.na(car_bf$member)])
+table(is.na(car_bf$member))
+
+# Now create new variable for linking with lab dataset
+car_bf$menage_id_member = paste0(car_bf$menage_id, "-", car_bf$member)
+car_bf$menage_id_member
+
+table(car_bf$germe_c)
+
+# Remove ECC1801 (checked with Franck), which should be ECC01101, and are therefore duplicates so can be removed
+which(car_bf$household=="ECC1801")
+
+car_bf = car_bf %>% filter(!household=="ECC1801") 
+
+# Reorder columns
+# Define the variables to move to the start
+start_vars <- c("record_id","household",  "redcap_event_name",                                          
+                "redcap_repeat_instrument","redcap_repeat_instance","village", "village_name", "intervention_text")
+
+# Define the variables to move to the end
+middle_vars <- c("id_ecantillon","menage_id_member","member", "menage_id", "germe","morphotyp", "germe_c", "testesbl", "esbl_pos")
+
+# Get all remaining variables (excluding those in start_vars and end_vars)
+end_vars <- setdiff(names(car_bf), c(start_vars, middle_vars))
+
+# Define the new column order
+new_order <- c(start_vars, middle_vars, end_vars)
+new_order
+
+# Reorder the dataset
+car_bf <- car_bf[, new_order]
+
+table(car_bf$esbl_pos)
+table(car_bf$testesbl)
+
+# Remove unnecessary variables
+names(car_bf)
+car_bf <- car_bf %>% select(-c(ajouter, bras, found_in_hh, redcap_repeat_instrument, redcap_repeat_instance, check_list))
+
+# LINKAGE AND EXPORT
+#---------------------------------------------------------
+
+
+
+
+
+#---------------------------------------------------------
+# DESCRIPTIVES
+#----------------------------------------------------------
+# R0 characteristics 
+table_wash = table1(~ n.householdmember +
+                      n.child.0to5 +
+                      n.households.concession +
+                      main.drinking.water.dry.binary+
+                    main.drinking.water.rainy.binary+ 
+                    cleaning.water.storage.binary+
+                    correct.handwashing.binary+
+                    improved.sanitation.binary+
+                    livestock.access.house.binary+
+                    animal.excrement.floor.binary+
+                          factor(q1.diar.prev.water.pot.covered) +
+                          #q1_diarrhee_prevenu +
+                          factor(q1.diar.prev.no.finger.in.waterglass) +  
+                          factor(q1.diar.prev.utensil.to.take.water.from.pot) + 
+                          #factor(q1_diarrhee_prevenu.filtrer_l_eau_de_boisson) +
+                          factor(q1.diar.prev.cover.food) +
+                          factor(q1.diar.prev.boil.water) + 
+                          factor(q1.diar.prev.filter.water) + 
+                          factor(q1.diar.prev.other)+
+                          factor(q1.diar.prev.cant.be.avoided) + 
+                          factor(q1.diar.prev.dont.know) + 
+                          factor(q2.main.water.source.dry) + 
+                          factor(q3.main.water.source.rainy) + 
+                          factor(q4.cans.storage.water) + 
+                          factor(q5a.cans.storage.water.closed.when.filled) +
+                          factor(q5b.cans.storage.water.closed.wen.empty) + 
+                          factor(q5c.cans.cleaned.before.reuse) +
+                          factor(q6.treatment.water) + 
+                          factor(q7.principle.defication) + 
+                          factor(q8.other.defecation.flush.toiled.septic) + 
+                          factor(q8.other.defecation.pit.latrine.ventilation) + 
+                          factor(q8.other.defecation.pit.latrine.slab) + 
+                          factor(q8.other.defecation.pit.latrine.no.slab) +
+                          factor(q8.other.defecation.open.defecation) + 
+                          factor(q8.other.defecation.other) +                                
+                          #q8.other.defecation.none + 
+                          #q9.shared.toilet.c + 
+                          as.numeric(q10.n.shared.toilet) +
+                          factor(q11.toilet.last.cleaned) + 
+                          factor(q12.disposal.child.stool) + 
+                          factor(q13.disposal.latrine.pit) +
+                          factor(q14.handwashing.product) + 
+                          factor(q15.handwashing.defecation) + 
+                          factor(q16.handwashing.meals) +  
+                          factor(q17.animals.around.household) + 
+                          factor(q18.animal.inside.cow) +  
+                          factor(q18.animal.inside.sheep.goat) + 
+                          factor(q18.animal.inside.pig) + 
+                          factor(q18.animal.inside.donkey.horse) + 
+                          factor(q18.animal.inside.chicken.goose.duck) +  
+                          factor(q18.animal.inside.other) +  
+                          factor(q19.animal.outside.cow) + 
+                          factor(q19.animal.outside.sheep.goat) +
+                          factor(q19.animal.outside.pig) +
+                          factor(q19.animal.outside.donkey.horse) +
+                          factor(q19.animal.outside.chicken.goose.duck) + 
+                          factor(q19.animal.outside.other) +   
+                          factor(q20.animal.excrement.floor) +    
+                          factor(q21.when.animal.ill.treatment.with.vet) + 
+                          factor(q21.when.animal.ill.treatment.without.vet) +
+                          factor(q21.when.animal.ill.sell.bucher) +
+                          factor(q21.when.animal.ill.slaugter.eat.at.home) +     
+                          factor(q21.when.animal.ill.dies.burie.dispose) +
+                          factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text), data=d_wash)
+table_wash
+
+# R2 characteristics 
+table_wash_r2 = table1(~ n.householdmember +
+                      n.child.0to5 +
+                      n.households.concession +
+                      main.drinking.water.dry.binary+
+                      main.drinking.water.rainy.binary+ 
+                      cleaning.water.storage.binary+
+                      correct.handwashing.binary+
+                      improved.sanitation.binary+
+                      livestock.access.house.binary+
+                      animal.excrement.floor.binary+
+                      factor(q1.diar.prev.water.pot.covered) +
+                      #q1_diarrhee_prevenu +
+                      factor(q1.diar.prev.no.finger.in.waterglass) +  
+                      factor(q1.diar.prev.utensil.to.take.water.from.pot) + 
+                      #factor(q1_diarrhee_prevenu.filtrer_l_eau_de_boisson) +
+                      factor(q1.diar.prev.cover.food) +
+                      factor(q1.diar.prev.boil.water) + 
+                      factor(q1.diar.prev.filter.water) + 
+                      factor(q1.diar.prev.other)+
+                      factor(q1.diar.prev.cant.be.avoided) + 
+                      factor(q1.diar.prev.dont.know) + 
+                      factor(q2.main.water.source.dry) + 
+                      factor(q3.main.water.source.rainy) + 
+                      factor(q4.cans.storage.water) + 
+                      factor(q5a.cans.storage.water.closed.when.filled) +
+                      factor(q5b.cans.storage.water.closed.wen.empty) + 
+                      factor(q5c.cans.cleaned.before.reuse) +
+                      factor(q6.treatment.water) + 
+                      factor(q7.principle.defication) + 
+                      factor(q8.other.defecation.flush.toiled.septic) + 
+                      factor(q8.other.defecation.pit.latrine.ventilation) + 
+                      factor(q8.other.defecation.pit.latrine.slab) + 
+                      factor(q8.other.defecation.pit.latrine.no.slab) +
+                      factor(q8.other.defecation.open.defecation) + 
+                      factor(q8.other.defecation.other) +                                
+                      #q8.other.defecation.none + 
+                      #q9.shared.toilet.c + 
+                      as.numeric(q10.n.shared.toilet) +
+                      factor(q11.toilet.last.cleaned) + 
+                      factor(q12.disposal.child.stool) + 
+                      factor(q13.disposal.latrine.pit) +
+                      factor(q14.handwashing.product) + 
+                      factor(q15.handwashing.defecation) + 
+                      factor(q16.handwashing.meals) +  
+                      factor(q17.animals.around.household) + 
+                      factor(q18.animal.inside.cow) +  
+                      factor(q18.animal.inside.sheep.goat) + 
+                      factor(q18.animal.inside.pig) + 
+                      factor(q18.animal.inside.donkey.horse) + 
+                      factor(q18.animal.inside.chicken.goose.duck) +  
+                      factor(q18.animal.inside.other) +  
+                      factor(q19.animal.outside.cow) + 
+                      factor(q19.animal.outside.sheep.goat) +
+                      factor(q19.animal.outside.pig) +
+                      factor(q19.animal.outside.donkey.horse) +
+                      factor(q19.animal.outside.chicken.goose.duck) + 
+                      factor(q19.animal.outside.other) +   
+                      factor(q20.animal.excrement.floor) +    
+                      factor(q21.when.animal.ill.treatment.with.vet) + 
+                      factor(q21.when.animal.ill.treatment.without.vet) +
+                      factor(q21.when.animal.ill.sell.bucher) +
+                      factor(q21.when.animal.ill.slaugter.eat.at.home) +     
+                      factor(q21.when.animal.ill.dies.burie.dispose) +
+                      factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text), data=d_wash_r2)
+table_wash_r2
+
+

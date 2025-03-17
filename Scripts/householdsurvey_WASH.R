@@ -743,10 +743,38 @@ table(car_bf$testesbl)
 names(car_bf)
 car_bf <- car_bf %>% select(-c(ajouter, bras, found_in_hh, redcap_repeat_instrument, redcap_repeat_instance, check_list))
 
+#-----------------------------------------------------------
+# LINK INDIVIDUAL WITH HOUSEHOLD DATA
+#-----------------------------------------------------------
+
+d_lab_wash = left_join(d_lab_de%>%
+                         select(-c(village, redcap_event_name, data.row)), d_wash)
+
+d_lab_wash_r2 = left_join(d_lab_de%>%
+                         select(-c(village, redcap_event_name, data.row)), d_wash_r2)
+
 # LINKAGE AND EXPORT
 #---------------------------------------------------------
+# Export WASH dataset for all households
+d_wash_b = rbind(d_wash, d_wash_r2)
+write.csv(d_wash_b, paste0(DirectoryDataOut, "./individual_datasets_final/Household_WASH_BF.csv")) 
 
+# Export WASH dataset for those with stool sample
+d_lab_wash_b = rbind(d_lab_wash, d_lab_wash_r2)
 
+write.csv(d_lab_wash_b, paste0(DirectoryDataOut, "./individual_datasets_final/Individual_WASH_BF.csv")) 
+
+# Export cleaned stool collection
+describe(car_bf)
+car_bf = car_bf %>% select(-c(
+  "interpretr_ampici_amoxicil", "comment_ampici_amoxic", "interpr_amoxi_acid_clavu", "comment_amoxi_acid_clavu",
+  "interpr_piperaci_tazobac", "comment_piperacil_tazobact", "interpr_cetriax_or_cefotax", "interpr_cefepime",
+  "comment_cefepime", "comment_meropenem", "comment_ertapenem", "interpr_gentamycine",
+  "comment_gentamycine", "interpr_amykacine", "comment_amykacine", "interpr_ciprofloxacine",
+  "comment_ciprofloxacine", "interpr_pfloxacine", "comment_pfloxacine", "interpr_sulfame_trimethop",
+  "comment_sulfa_trimethop","comment_cetriax_cefataxi"))
+
+write.csv(car_bf, paste0(DirectoryDataOut, "./individual_datasets_final/Individual_stool_BF.csv")) 
 
 
 

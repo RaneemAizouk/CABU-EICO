@@ -17,15 +17,11 @@ DirectoryData <- "./Data/BF/clean"
 source("./Scripts/functions/multiplot.R")
 
 # Load household data
-hh = read.csv(paste0(DirectoryData,"/individual_datasets_final/Household_WASH_BF.csv"))
-hh_ind = read.csv(paste0(DirectoryData,"/individual_datasets_final/Individual_WASH_BF.csv"))
+hh = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_WASH_BF.csv"))
+hh_ind = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
 
-# Load stool data
-col = read.csv(paste0(DirectoryData,"/individual_datasets_final/Individual_Stool_BF.csv"))
+load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_all.rda"))
 
-# Link stool data with household data
-d_r1 = left_join(col%>%filter(redcap_event_name=="round_0_arm_1"), hh_ind%>%filter(redcap_event_name=="round_0_arm_1"))
-d_r4 = left_join(col%>%filter(redcap_event_name=="round_3_arm_1"), hh_ind%>%filter(redcap_event_name=="round_3_arm_1"))
 
 # PREAMBLE
 #-----------------------------------------------------------
@@ -267,5 +263,74 @@ dev.off()  # Close PNG device
 
 
 #-----------------------------------------------------------
-# DESCRIBE HOUSEHOLD DATA PER CLUSTER
+# DESCRIBE PREVALENCE PER HOUSEHOLD AND VILLAGE
 #-----------------------------------------------------------
+
+# Compute ESBL prevalence per household per round
+hh_prev <- dfls0 %>%
+  group_by(redcap_event_name, menage_id) %>%
+  summarise(
+    n.positive = sum(esble, na.rm = TRUE),
+    n.tested = unique(n.tested),
+    prevalence = n.positive / unique(n.tested)
+  )
+
+hh_prev = left_join(hh_prev, hh %>%select(c(menage_id, redcap_event_name,main.drinking.water.dry.binary,main.drinking.water.rainy.binary,
+                                            cleaning.water.storage.binary,correct.handwashing.binary,improved.sanitation.binary,
+                                            livestock.access.house.binary,animal.excrement.floor.binary)))
+
+hh_prev_long <- hh_prev %>% filter(redcap_event_name%in%c("round_0_arm_1","round_3_arm_1"))%>%
+  pivot_longer(
+    cols = c(main.drinking.water.dry.binary, main.drinking.water.rainy.binary,
+             cleaning.water.storage.binary, correct.handwashing.binary,
+             improved.sanitation.binary, livestock.access.house.binary,
+             animal.excrement.floor.binary),
+    names_to = "WASH_indicator",
+    values_to = "WASH_value"
+  ) %>%
+  mutate(WASH_value = ifelse(is.na(WASH_value), "Missing", as.character(WASH_value)),
+    WASH_value = factor(WASH_value, levels=c("Improved", "Unimproved", "Yes", "No", "Missing")))
+
+p5 = ggplot(data = hh_prev_long %>% filter(redcap_event_name=="round_0_arm_1"), aes(x = factor(WASH_indicator), y = prevalence, fill=WASH_value)) +
+  theme_minimal()+
+  geom_boxplot() +
+  #geom_jitter(width = 0.3, alpha = 0.5, aes(col=WASH_value)) +
+  labs(x = "WASH Indicator", y = "Prevalence per Household",
+       title ="Baseline") +
+  theme(
+    panel.grid.major = element_line(colour = "gray90", linetype = "dashed"),  
+    panel.grid.minor = element_line(colour = "gray95", linetype = "dotted"),
+    axis.text.x = element_text(angle = 0, size = 10),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 10),  # Adjust y-axis text size
+    strip.text = element_text(size = 14, face = "bold"),  # Increase facet label size
+    legend.position = "bottom"
+  ) +
+  #facet_wrap(~redcap_event_name, ncol=2) +
+  coord_flip()
+p5
+
+p6 = ggplot(data = hh_prev_long %>% filter(redcap_event_name=="round_3_arm_1"), aes(x = factor(WASH_indicator), y = prevalence, fill=WASH_value)) +
+  theme_minimal()+
+  geom_boxplot() +
+  #geom_jitter(width = 0.3, alpha = 0.5, aes(col=WASH_value)) +
+  labs(x = "WASH Indicator", y = "Prevalence per Household",
+       title ="Post-intervention") +
+  theme(
+    panel.grid.major = element_line(colour = "gray90", linetype = "dashed"),  
+    panel.grid.minor = element_line(colour = "gray95", linetype = "dotted"),
+    axis.text.x = element_text(angle = 0, size = 10),  # Rotate x-axis labels
+    axis.text.y = element_text(size = 10),  # Adjust y-axis text size
+    strip.text = element_text(size = 14, face = "bold"),  # Increase facet label size
+    legend.position = "bottom"
+  ) +
+  #facet_wrap(~redcap_event_name, ncol=2) +
+  coord_flip()
+p6
+
+png("./Output/Figures/BF/WASH_prevalence_pre.png",width = 6, height = 4, units = "in", res = 300)  # Start PNG device
+multiplot(p5, cols = 1)  # Adjust 'cols' to control layout
+dev.off()  # Close PNG device
+
+png("./Output/Figures/BF/WASH_prevalence_post.png",width = 6, height = 4, units = "in", res = 300)  # Start PNG device
+multiplot(p6, cols = 1)  # Adjust 'cols' to control layout
+dev.off()  # Close PNG device

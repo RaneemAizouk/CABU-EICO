@@ -1205,6 +1205,14 @@ table(numround$n) # 747 with complete data
 
 com = numround %>% filter(n>3)
 
+# Add number of tested individual per round per household as denominator for prevalence
+ntested = dt_filtered %>% group_by(menage_id, time) %>%
+  summarise(
+    n.tested = length(menage_id_member)
+  )
+
+dt_filtered = left_join(dt_filtered, ntested)
+
 dt_filtered_complete = dt_filtered%>%filter(menage_id_member%in%com$menage_id_member)
 
 # NOW LINK DATA WITH WASH HOUSEHOLD DATA
@@ -1217,10 +1225,6 @@ dt_wash = left_join(dt, d_wash_b%>%select(-c(village,village_name, intervention.
 # MSM data stool samples
 dt_filtered_wash = left_join(dt_filtered, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
 dt_filtered_complete_wash = left_join(dt_filtered_complete, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
-
-
-
-
 
 #-----------------------------------------------------------
 # LINK INDIVIDUAL WITH HOUSEHOLD DATA

@@ -658,7 +658,7 @@ d_lab$member = as.character(as.numeric(d_lab$member))
 table(is.na(d_lab$member))
 d_lab$cs.id.individu[is.na(d_lab$member)] # 22 individuals have a household member number missing, see if still all lab_ids can be linked when merging with car_bf
 #View(wash_r0_lab[is.na(wash_r0_lab$member),])
-d_lab$num.echantillon[is.na(d_lab$member)] # of 0 we can get them from num_echantillon
+d_lab$num.echantillon[is.na(d_lab$member)] # of 0 we can get them from num_echantillon; however it seems also here, member number is missing
 
 # Now create new variable for linking with lab dataset
 d_lab$menage_id_member = paste0(d_lab$menage_id, "-", d_lab$member)
@@ -684,10 +684,96 @@ setdiff(new_order, names(d_lab))  # Shows any missing columns
 
 d_lab <- d_lab[, new_order]  
 
+# Sort out NAs
+d_lab$cs.id.individu[is.na(d_lab$member)]
+#"SCB0220203"  "SCB0220201"  "SCB02202002" "SCB0220204"  "SCB0220205"  "SCB0220206"  "SCB0240201"  "SCB0240202"  "SCB0240203" 
+# "SCB0240204"  "SCB0240205"  "SCB0220206"  "SCB0240207"  "SCB0240208"  "SCB0240209"  "SCB0240210"  "SCB0240211"  "SCB0240212" 
+# "SCB0310101"  "SCB0310102"  "SCB0310103"  "SCB0310104"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0220203"] = "SCB00002202-3"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0220201"] = "SCB00002202-1"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB02202002"] = "SCB00002202-2"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0220204"] = "SCB00002202-4"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0220205"] = "SCB00002202-5"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0220206"] = "SCB00002202-6"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240201"] = "SCB00002402-1"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240202"] = "SCB00002402-2"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240203"] = "SCB00002402-3"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240204"] = "SCB00002402-4"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240205"] = "SCB00002402-5"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0220206"&d_lab$num.echantillon=="SCB0240206"] = "SCB00002402-6"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240207"] = "SCB00002402-7"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240208"] = "SCB00002402-8"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240209"] = "SCB00002402-9"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240210"] = "SCB00002402-10"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240211"] = "SCB00002402-11"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0240212"] = "SCB00002402-12"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0310101"] = "SCB00003101-1"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0310102"] = "SCB00003101-2"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0310103"] = "SCB00003101-3"
+d_lab$menage_id_member[d_lab$cs.id.individu=="SCB0310104"] = "SCB00003101-4"
+
+d_lab$member[d_lab$data.row=="4112"] = 2
+d_lab$menage_id_member[d_lab$data.row=="4112"] = "ELB00002903-2"
+d_lab$member[d_lab$data.row=="3660"] = 2
+d_lab$menage_id_member[d_lab$data.row=="3660"] = "EKE00047020-2"
+d_lab$member[d_lab$data.row=="2261"] = 1
+d_lab$menage_id_member[d_lab$data.row=="2261"] = "EEI00000107-1"
+d_lab$member[d_lab$data.row=="1903"] = 3
+d_lab$menage_id_member[d_lab$data.row=="1903"] = "EDN00002003-3"
+
+
+table(d_lab$redcap_event_name) # These are the denominator number of individuals tested per round, i.e. 1221, 1014, 1017, 1003
+length(unique(d_lab$menage_id_member[d_lab$redcap_event_name=="round_0_arm_1"])) # 1214
+length(unique(d_lab$menage_id_member[d_lab$redcap_event_name=="round_1_arm_1"])) # 1010
+length(unique(d_lab$menage_id_member[d_lab$redcap_event_name=="round_2_arm_1"])) # 1011
+length(unique(d_lab$menage_id_member[d_lab$redcap_event_name=="round_3_arm_1"])) # 1003
+
+# Lab data only round 1
+d_lab_r1 = d_lab %>% filter(redcap_event_name=="round_0_arm_1")
+d_lab_r2 = d_lab %>% filter(redcap_event_name=="round_1_arm_1")
+d_lab_r3 = d_lab %>% filter(redcap_event_name=="round_2_arm_1")
+d_lab_r4 = d_lab %>% filter(redcap_event_name=="round_3_arm_1")
+
+# Remove duplicates - round 1
+dup = d_lab_r1$menage_id_member[duplicated(d_lab_r1$menage_id_member)] 
+View(d_lab_r1%>%filter(menage_id_member%in%dup)) # Genuine duplicates
+#table(duplicated(d_lab_r1$menage_id_member))# 7 duplicates, these are all genuine duplicates and can be removed 
+rm.data.row = d_lab_r1$data.row[duplicated(d_lab_r1$menage_id_member)]
+d_lab_r1 = d_lab_r1 %>%filter(!data.row %in%rm.data.row)
+
+# Remove duplicates - round 2
+dup2 = d_lab_r2$menage_id_member[duplicated(d_lab_r2$menage_id_member)] 
+length(unique(dup2)) # 4 duplicates
+#View(d_lab_r2%>%filter(menage_id_member%in%dup2)) # CRAS0101-1 and SJB00003702-2 not duplicates 
+#View(d_lab_r1 %>%filter(menage_id_member%in%dup2)) # EAD00000903-4; SJB00003702-2 seem to be different persons in round 0 than in round 1?
+#View(d_lab_r3 %>%filter(menage_id_member%in%dup2)) # Checked,CRAS0101-1 = Female 10-19; EAD00000903-4 = Male 0-9 in 3 out of 4 rounds; SJB00003702-2 = Female 20-29 in 3/4 rounds
+#View(d_lab_r4 %>%filter(menage_id_member%in%dup2))
+
+d_lab_r2 = d_lab_r2 %>% filter(!data.row %in%c(345,1012,4185,6776))
+d_lab_r2$age[d_lab_r2$data.row==6775] = 24
+d_lab_r2$agegr10[d_lab_r2$data.row==6775] = "20-29"
+d_lab_r2$sexe[d_lab_r2$data.row==6775] = "Female"
+
+# Remove duplicates - round 3
+dup3 = d_lab_r3$menage_id_member[duplicated(d_lab_r3$menage_id_member)] 
+length(unique(dup3)) # 2
+#View(d_lab_r3 %>%filter(menage_id_member%in%dup3)) # Duplicates
+rm.data.row.r3 =  d_lab_r3$data.row[duplicated(d_lab_r3$menage_id_member)]
+d_lab_r3 = d_lab_r3 %>%filter(!data.row%in%rm.data.row.r3)
+
+# Do the same for d_lab
+d_lab = d_lab %>% filter(!data.row%in%c(rm.data.row,rm.data.row.r3))
+d_lab = d_lab %>% filter(!data.row %in%c(345,1012,4185,6776))
+d_lab$age[d_lab$data.row==6775] = 24
+d_lab$agegr10[d_lab$data.row==6775] = "20-29"
+d_lab$sexe[d_lab$data.row==6775] = "Female"
+
 # Then for remainder keep first record 
 d_lab_de = d_lab %>% filter(!duplicated(menage_id_member))  # 1237
 table(duplicated(d_lab_de$menage_id_member)) # 
-table(d_lab_de$redcap_event_name) # 1191 individuals in round 0, new ones: 21 (round 1); 18 (round 2); 7 (round 3)
+table(d_lab_de$redcap_event_name) # 1191 individuals in round 0, new ones: 21 (round 1); 18 (round 2); 7 (round 3) 
+                                  # Update: after converting about IDs this is
+                                  # 1205 individuals in round 0, new ones: 8 (round 1); 17 (round 2); 7 (round 3) 
 
 
 # Now create the same variable for the lab dataset
@@ -743,28 +829,10 @@ table(car_bf$testesbl)
 names(car_bf)
 car_bf <- car_bf %>% select(-c(ajouter, bras, found_in_hh, redcap_repeat_instrument, redcap_repeat_instance, check_list))
 
+
 #-----------------------------------------------------------
-# LINK INDIVIDUAL WITH HOUSEHOLD DATA
+# LINK INDIVIDUAL WITH STOOL DATA
 #-----------------------------------------------------------
-
-d_lab_wash = left_join(d_lab_de%>%
-                         select(-c(village, redcap_event_name, data.row)), d_wash)
-
-d_lab_wash_r2 = left_join(d_lab_de%>%
-                         select(-c(village, redcap_event_name, data.row)), d_wash_r2)
-
-# LINKAGE AND EXPORT
-#---------------------------------------------------------
-# Export WASH dataset for all households
-d_wash_b = rbind(d_wash, d_wash_r2)
-write.csv(d_wash_b, paste0(DirectoryDataOut, "./individual_datasets_final/Household_WASH_BF.csv")) 
-
-# Export WASH dataset for those with stool sample
-d_lab_wash_b = rbind(d_lab_wash, d_lab_wash_r2)
-
-write.csv(d_lab_wash_b, paste0(DirectoryDataOut, "./individual_datasets_final/Individual_WASH_BF.csv")) 
-
-# Export cleaned stool collection
 describe(car_bf)
 car_bf = car_bf %>% select(-c(
   "interpretr_ampici_amoxicil", "comment_ampici_amoxic", "interpr_amoxi_acid_clavu", "comment_amoxi_acid_clavu",
@@ -774,8 +842,203 @@ car_bf = car_bf %>% select(-c(
   "comment_ciprofloxacine", "interpr_pfloxacine", "comment_pfloxacine", "interpr_sulfame_trimethop",
   "comment_sulfa_trimethop","comment_cetriax_cefataxi"))
 
-write.csv(car_bf, paste0(DirectoryDataOut, "./individual_datasets_final/Individual_stool_BF.csv")) 
+d_lab_car_bf_r1 = left_join(d_lab_r1 %>% select(-c(village, redcap_event_name, data.row)), car_bf %>% filter(redcap_event_name=="round_0_arm_1"))
+d_lab_car_bf_r2 = left_join(d_lab_r2 %>% select(-c(village, redcap_event_name, data.row)), car_bf %>% filter(redcap_event_name=="round_1_arm_1")) 
+d_lab_car_bf_r3 = left_join(d_lab_r3 %>% select(-c(village, redcap_event_name, data.row)), car_bf %>% filter(redcap_event_name=="round_2_arm_1"))
+d_lab_car_bf_r4 = left_join(d_lab_r4 %>% select(-c(village, redcap_event_name, data.row)), car_bf %>% filter(redcap_event_name=="round_3_arm_1"))
 
+table(d_lab$redcap_event_name)
+
+length(unique(d_lab_car_bf_r1$menage_id_member)) # 1214
+length(unique(d_lab_car_bf_r2$menage_id_member)) # 1010
+length(unique(d_lab_car_bf_r3$menage_id_member)) # 1015
+length(unique(d_lab_car_bf_r4$menage_id_member)) # 1003
+
+# Create a dataframe with households linked to villages so these can be augmented for those that were not in the lab database
+hh_villages = d_wash %>%
+  select(village, village_name, intervention.text, menage_id) %>%
+  distinct()
+
+hh_villages = hh_villages %>%
+  rename(
+    intervention_text = "intervention.text"
+  )
+
+#anti_join(d_lab_car_bf_r1, hh_villages, by = "menage_id") %>%
+#  count(menage_id)
+
+# ROUND 1
+d_lab_car_bf_r1 = left_join(d_lab_car_bf_r1 %>%select(-c(village, village_name, intervention_text)), hh_villages, by = "menage_id")
+d_lab_car_bf_r1$redcap_event_name = "round_0_arm_1"
+d_lab_car_bf_r1$esbl_pos = ifelse(is.na(d_lab_car_bf_r1$esbl_pos), 0,d_lab_car_bf_r1$esbl_pos) 
+  
+table(d_lab_car_bf_r1$esbl_pos, useNA="always")
+
+# ROUND 2
+d_lab_car_bf_r2 = left_join(d_lab_car_bf_r2 %>%select(-c(village, village_name,intervention_text)), hh_villages, by = "menage_id")
+d_lab_car_bf_r2$redcap_event_name = "round_1_arm_1"
+d_lab_car_bf_r2$esbl_pos = ifelse(is.na(d_lab_car_bf_r2$esbl_pos), 0,d_lab_car_bf_r2$esbl_pos) 
+
+table(d_lab_car_bf_r2$esbl_pos, useNA="always")
+
+# ROUND 3
+d_lab_car_bf_r3 = left_join(d_lab_car_bf_r3 %>%select(-c(village, village_name, intervention_text)), hh_villages, by = "menage_id")
+d_lab_car_bf_r3$redcap_event_name = "round_2_arm_1"
+d_lab_car_bf_r3$esbl_pos = ifelse(is.na(d_lab_car_bf_r3$esbl_pos), 0,d_lab_car_bf_r3$esbl_pos) 
+
+table(d_lab_car_bf_r3$esbl_pos, useNA="always")
+
+# ROUND 4
+d_lab_car_bf_r4 = left_join(d_lab_car_bf_r4 %>%select(-c(village, village_name, intervention_text)), hh_villages, by = "menage_id")
+d_lab_car_bf_r4$redcap_event_name = "round_3_arm_1"
+d_lab_car_bf_r4$esbl_pos = ifelse(is.na(d_lab_car_bf_r4$esbl_pos), 0,d_lab_car_bf_r4$esbl_pos) 
+
+table(d_lab_car_bf_r4$esbl_pos, useNA="always")
+
+d_lab_car_bf_all = rbind(d_lab_car_bf_r1,d_lab_car_bf_r2, d_lab_car_bf_r3, d_lab_car_bf_r4)
+missing.age = d_lab_car_bf_all$menage_id_member[is.na(d_lab_car_bf_all$age)]
+length(missing.age)
+
+# Identify missing ages and replace
+dt <- d_lab_car_bf_all %>%
+  group_by(menage_id_member) %>%
+  mutate(
+    age = ifelse(is.na(age), first(na.omit(age)), age),
+    agegr10 = ifelse(is.na(agegr10), first(na.omit(as.character(agegr10))), as.character(agegr10))
+  ) %>%
+  ungroup()
+
+table(is.na(dt$age)) # Replaced 111-38 = 73
+table(is.na(d_lab_car_bf_all$age))
+
+# Check
+summary(dt$age, rm.na=T)
+summary(d_lab_car_bf_all$age, rm.na=T) # Same averages
+
+# Augment collection dates when missing
+dt = dt %>% mutate(
+  date = as.Date(date, format="%Y-%m-%d"),
+  date.stool.collection = as.Date(date.stool.collection, format="%Y-%m-%d"),
+  date.consent = as.Date(date.consent, format = "%Y-%m-%d"),
+  date.stool.collection = as.Date(date.stool.collection, format="%Y-%m-%d"),
+  date.check = date - date.consent,
+  date.check.collect = date - date.stool.collection,
+  date.use = as.character(date.stool.collection),
+  date.use = ifelse(is.na(as.character(date.stool.collection)), 
+                    as.character(date.consent),as.character(date.stool.collection)), # This replaced the empty dates with consent date as proxy
+  date.use = as.Date(date.use, format = "%Y-%m-%d"),
+  month = format(date.use,"%m"),
+  date.check.use = date - date.use,
+  time = ifelse(redcap_event_name =="round_0_arm_1", 0,
+                ifelse(redcap_event_name == "round_1_arm_1", 1,
+                       ifelse(redcap_event_name == "round_2_arm_1", 2,3))),
+  rainy = ifelse(month%in%c("06","07","08","09"),"yes", "no")) %>% 
+  select(-c(date.check, date.check.collect, date.check.use))
+
+
+# NOW CREATE DATASET FOR MSM MODEL
+dt_filtered <- dt %>%
+  dplyr::filter(!germe_c %in% c("salmonella")) %>%  # Keep only e.coli records; for those without ESBL-E, assume they all have e.coli
+  group_by(menage_id_member, redcap_event_name) %>%
+  summarise(
+    time = first(time),
+    menage_id = first(menage_id),
+    village = first(village),
+    village_name = first(village_name),
+    intervention_text = first(intervention_text),
+    age = first(age[!is.na(age)]),
+    agegr10 = first(agegr10[!is.na(agegr10)]),
+    sexe = first(sexe[!is.na(sexe)]),
+    month = first(month),
+    rainy = first(rainy),
+    date.consent = first(date.consent[!is.na(date.consent)]),
+    date.stool.collection = first(date.stool.collection[!is.na(date.stool.collection)]),
+    date = first(date[!is.na(date)]),
+    date_conserv = first(date_conserv[!is.na(date_conserv)]),
+    date.use = first(date.use[!is.na(date.use)]),
+    germe_c = "e.coli",
+    esble = ifelse(any(esbl_pos == 1, na.rm = TRUE), 1, 0),  # Set esble = 1 if any observation is positive
+    .groups = "drop"
+  )
+
+dt %>% 
+  filter(germe_c%in%c(NA,"e.coli", "e.coli_2"))%>%
+  group_by(redcap_event_name)%>%
+  summarise(
+  n = length(unique(menage_id_member))
+  )
+table(dt_filtered$redcap_event_name)
+
+dt %>% 
+  filter(germe_c%in%c(NA,"e.coli", "e.coli_2"))%>%
+  group_by(redcap_event_name, esbl_pos)%>%
+  summarise(
+    n = length(unique(menage_id_member))
+  )
+
+dt_filtered %>% 
+  group_by(redcap_event_name,esble)%>%
+  summarise(
+    n = length(unique(menage_id_member))
+  )
+
+numround = dt_filtered %>% 
+  group_by(menage_id_member)%>%
+  summarise(
+    n = n())
+table(numround$n) # 747 with complete data
+
+# Filtered to those with complete cases
+com = numround %>% filter(n>3)
+
+dt_filtered_complete = dt_filtered%>%filter(menage_id_member%in%com$menage_id_member)
+
+# NOW LINK DATA WITH WASH HOUSEHOLD DATA
+#-------------------------------------------------------------------------------------
+d_wash_b = rbind(d_wash, d_wash_r2)
+
+# All stool samples
+dt_wash = left_join(dt, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
+
+# MSM data stool samples
+dt_filtered_wash = left_join(dt_filtered, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
+dt_filtered_complete_wash = left_join(dt_filtered_complete, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
+
+#-----------------------------------------------------------
+# LINK INDIVIDUAL WITH HOUSEHOLD DATA
+#-----------------------------------------------------------
+
+# Of note: the lab data contains only the ones positive for ESBL and/or with AST conducted.
+# Therefore, we need to link individuals in the household survey with individual characteristics 
+# With the lab survey to get the denominator of those tested.
+# So these datasets contain information on for each individual part of the cohort somewhere (across all rounds, 1237 unique
+# individuals in total), what their WASH exposure was in the baseline round and in the post-intervention round
+
+d_lab_wash = left_join(d_lab_de%>%
+                         select(-c(village, redcap_event_name, data.row)), d_wash) # 1237
+
+d_lab_wash_r2 = left_join(d_lab_de%>%
+                            select(-c(village, redcap_event_name, data.row)), d_wash_r2)
+
+d_lab_wash_b = rbind(d_lab_wash, d_lab_wash_r2)  
+
+# LINKAGE AND EXPORT
+#---------------------------------------------------------
+# Export WASH dataset for all households
+write.csv(d_wash_b, paste0(DirectoryDataOut, "./FINAL_FOR_SHARING/Household_WASH_BF.csv")) 
+
+# Export WASH dataset for those with stool sample
+write.csv(d_lab_wash_b, paste0(DirectoryDataOut, "./FINAL_FOR_SHARING/Household_individual_WASH_BF.csv")) 
+
+# Export cleaned and linked stool collection
+write.csv(dt_wash, paste0(DirectoryDataOut, "./FINAL_FOR_SHARING/Household_stool_WASH_BF.csv")) 
+
+# Export cleaned and linked data for MSM model
+dfls0 = dt_filtered_wash
+write.csv(dfls0, paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_all.rda")) 
+
+dfls0complete = dt_filtered_complete_wash
+write.csv(dfls0complete, paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_completecases_UPDATE.rda")) 
 
 
 #---------------------------------------------------------

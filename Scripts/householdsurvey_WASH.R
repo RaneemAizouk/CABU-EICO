@@ -25,7 +25,7 @@ rm(list=ls())
 
 # load package
 pacman::p_load(readxl, writexl, lubridate, zoo, ggplot2, tidyverse, Hmisc, stringr,lme4,reshape2, 
-               openxlsx, table1, flextable, magrittr, officer, msm, skimr)
+               openxlsx, table1, flextable, magrittr, officer, msm, skimr, wesanderson, patchwork)
 
 # SET DIRECTORY
 DirectoryData <- "./Data/BF/Raw"
@@ -935,6 +935,217 @@ dt = dt %>% mutate(
   rainy = ifelse(month%in%c("06","07","08","09"),"yes", "no")) %>% 
   select(-c(date.check, date.check.collect, date.check.use))
 
+#ggplot(dt, aes(x=date.check.collect, group=redcap_event_name)) + geom_histogram() +
+#  facet_wrap(~ redcap_event_name)
+
+# CLEAN DATES FURTHER
+table(dt$date.use, useNA="always")
+dt$date.use[is.na(dt$date.use)] = dt$date[is.na(dt$date.use)] 
+
+dt <- dt %>%
+  group_by(menage_id_member) %>%
+  mutate(
+    first_round_date = min(date.use[redcap_event_name == "round_0_arm_1"], na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Identify individuals with missing first-round dates
+dt <- dt %>%
+  mutate(
+    first_round_missing = is.na(first_round_date) | first_round_date == Inf
+  )
+
+table(dt$first_round_missing)
+
+# Summary
+cat("Number of individuals who received a first-round date from a household member:", sum(dt$first_round_missing==T), "\n")
+
+# Fill missing first_round_date using household members (menage_id)
+#view(table(dt$menage_id, dt$first_round_date))
+
+dt <- dt %>%
+  group_by(menage_id) %>%
+  mutate(
+    first_round_date = ifelse(first_round_missing,
+                              max(first_round_date[first_round_date!=Inf], na.rm=T),  # Borrow from household members
+                              first_round_date)
+  ) %>%
+  ungroup()
+table(dt$first_round_date, useNA="always")
+
+dt <- dt %>%
+  mutate(
+    first_round_missing = first_round_date == -Inf
+  )
+table(dt$first_round_missing)
+
+dt <- dt %>%
+  group_by(village_name) %>%
+  mutate(
+    first_round_date = ifelse(first_round_missing,
+                              max(first_round_date[first_round_date!=-Inf], na.rm=T),  # Borrow from household members
+                              first_round_date)
+  ) %>%
+  ungroup()
+table(dt$first_round_date)
+
+# Ensure no Inf values remain
+#dt$first_round_date[dt$first_round_date == Inf] <- NA
+
+# Convert to Date format (if numeric)
+dt <- dt %>%
+  mutate(
+    first_round_date = as.Date(first_round_date, origin = "1970-01-01"),
+    date.use = as.Date(date.use)  # Ensure date.use is also in Date format
+  )
+
+# Calculate the number of days since the first round
+dt <- dt %>%
+  mutate(
+    days_since_first_round = as.numeric(date.use - first_round_date)  # Time difference in days
+  )
+
+# Remove helper column
+dt <- dt %>% select(-first_round_missing)
+
+
+# CHECK
+ggplot(dt, aes(x = days_since_first_round)) +
+  geom_histogram(binwidth = 10, fill = "black", alpha = 0.8) +
+  facet_wrap(~redcap_event_name) +
+  theme_minimal() +
+  labs(title = "Distribution of Days Since First Round by Event",
+       x = "Days Since First Round",
+       y = "Count")
+
+dt %>%
+  group_by(redcap_event_name, time) %>%
+  summarise(
+    mean_days_since_first = mean(days_since_first_round, na.rm = TRUE),
+    median_days_since_first = median(days_since_first_round, na.rm = TRUE),
+    min_days = min(days_since_first_round, na.rm = TRUE),
+    max_days = max(days_since_first_round, na.rm = TRUE),
+    count = n()
+  ) %>%
+  arrange(time) %>%
+  print()
+
+# All looks good for round 0
+r0min = min(dt$first_round_date, na.rm = TRUE)  # Start of Round 0
+r1min = r0min + 90  # Expected minimum for Round 1 (~3 months after R0)
+r2min = r0min + 180 # Expected minimum for Round 2 (~6 months after R0)
+r3min = r0min + 365 # Expected minimum for Round 3 (~12 months after R0)
+
+# Ensure correct sequencing by filtering cases that meet the minimum required date
+dt = dt %>%
+  mutate(
+    rc = case_when(
+      time == 0 ~ 1,  # Round 0 should always be included
+      time == 1 & date.use >= r1min ~ 1,  # Round 1 should be after r1min
+      time == 2 & date.use >= r2min ~ 1,  # Round 2 should be after r2min
+      time == 3 & date.use >= r3min ~ 1,  # Round 3 should be after r3min
+      TRUE ~ 0  # Mark as incorrect if date.use is before the expected minimum
+    )
+  )# %>%
+  #filter(rc == 1)  # Keep only correctly ordered cases
+
+table(dt$rc) # 34 not correct
+View(dt%>% filter(rc==0))
+
+
+dt = dt %>%
+  mutate(date.use = ifelse(rc==0, date, date.use))
+
+table(dt$date.use, useNA = "always") # 13 left with NA 
+
+# Fill missing date.use values using a household member from the same round
+dt <- dt %>%
+  group_by(menage_id, redcap_event_name) %>%  # Household level within the same round
+  mutate(
+    date.use = ifelse(is.na(date.use), max(date.use, na.rm = TRUE), date.use)  # Borrow from household members
+  ) %>%
+  ungroup()
+
+# Fill with village date
+dt <- dt %>%
+  group_by(village, redcap_event_name) %>%  # Household level within the same round
+  mutate(
+    date.use = ifelse(date.use==-Inf, max(date.use, na.rm = TRUE), date.use)  # Borrow from household members
+  ) %>%
+  ungroup()
+
+# Convert to Date format (if numeric)
+dt <- dt %>%
+  mutate(
+    date.use = as.Date(date.use)  # Ensure date.use is also in Date format
+  )
+
+table(dt$date.use, useNA = "always") # 2 left with Inf
+
+# Calculate again the number of days since the first round
+dt <- dt %>%
+  mutate(
+    days_since_first_round = as.numeric(date.use - first_round_date)  # Time difference in days
+  )
+
+# CHECK
+ggplot(dt, aes(x = days_since_first_round)) +
+  geom_histogram(binwidth = 10, fill = "black", alpha = 0.8) +
+  facet_wrap(~redcap_event_name) +
+  theme_minimal() +
+  labs(title = "Distribution of Days Since First Round by Event",
+       x = "Days Since First Round",
+       y = "Count")
+
+dt %>%
+  group_by(redcap_event_name, time) %>%
+  summarise(
+    mean_days_since_first = mean(days_since_first_round, na.rm = TRUE),
+    median_days_since_first = median(days_since_first_round, na.rm = TRUE),
+    min_days = min(days_since_first_round, na.rm = TRUE),
+    max_days = max(days_since_first_round, na.rm = TRUE),
+    count = n()
+  ) %>%
+  arrange(time) %>%
+  print()
+
+# ONE STILL NOT CORRECT, THAT IS OF EHL00002504-1, HERE THE FIRST ROUND DATE IS INCORRECT
+dt$date.use[dt$menage_id_member=="EHL00002504-1"&dt$redcap_event_name=="round_0_arm_1"] = as.Date("2022-11-06")  
+dt$first_round_date[dt$menage_id_member=="EHL00002504-1"&dt$redcap_event_name=="round_0_arm_1"] = as.Date("2022-11-06")  
+dt$first_round_date[dt$menage_id_member=="EHL00002504-1"] = as.Date("2022-11-06")  
+
+# Calculate again the number of days since the first round
+dt <- dt %>%
+  mutate(
+    days_since_first_round = as.numeric(date.use - first_round_date)  # Time difference in days
+  )
+
+#View(dt%>%filter(days_since_first_round==0&redcap_event_name=="round_1_arm_1"))
+
+# TWO STILL NOT CORRECT, THAT IS OF EDL00000401-1 and EDL00000401-2, HERE THE SECOND ROUND DATE IS INCORRECT
+# EDL00000401-1; EDL00000401-2
+dt$date.use[dt$menage_id_member=="EDL00000401-1"&dt$redcap_event_name=="round_1_arm_1"] = as.Date("2023-02-24") 
+dt$date.use[dt$menage_id_member=="EDL00000401-2"&dt$redcap_event_name=="round_1_arm_1"] = as.Date("2023-02-24") 
+
+# Calculate again the number of days since the first round
+dt <- dt %>%
+  mutate(
+    days_since_first_round = as.numeric(date.use - first_round_date)  # Time difference in days
+  )
+
+dt %>%
+  group_by(redcap_event_name, time) %>%
+  summarise(
+    mean_days_since_first = mean(days_since_first_round, na.rm = TRUE),
+    median_days_since_first = median(days_since_first_round, na.rm = TRUE),
+    min_days = min(days_since_first_round, na.rm = TRUE),
+    max_days = max(days_since_first_round, na.rm = TRUE),
+    count = n()
+  ) %>%
+  arrange(time) %>%
+  print()
+
+# YES!
 
 # NOW CREATE DATASET FOR MSM MODEL
 dt_filtered <- dt %>%
@@ -982,13 +1193,15 @@ dt_filtered %>%
     n = length(unique(menage_id_member))
   )
 
+
+# Filtered to those with complete cases
+
 numround = dt_filtered %>% 
   group_by(menage_id_member)%>%
   summarise(
     n = n())
 table(numround$n) # 747 with complete data
 
-# Filtered to those with complete cases
 com = numround %>% filter(n>3)
 
 dt_filtered_complete = dt_filtered%>%filter(menage_id_member%in%com$menage_id_member)
@@ -1003,6 +1216,10 @@ dt_wash = left_join(dt, d_wash_b%>%select(-c(village,village_name, intervention.
 # MSM data stool samples
 dt_filtered_wash = left_join(dt_filtered, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
 dt_filtered_complete_wash = left_join(dt_filtered_complete, d_wash_b%>%select(-c(village,village_name, intervention.text, groupe)))
+
+
+
+
 
 #-----------------------------------------------------------
 # LINK INDIVIDUAL WITH HOUSEHOLD DATA
@@ -1035,9 +1252,26 @@ write.csv(dt_wash, paste0(DirectoryDataOut, "./FINAL_FOR_SHARING/Household_stool
 
 # Export cleaned and linked data for MSM model
 dfls0 = dt_filtered_wash
+dfls0 = dfls0 %>%
+  rename(
+    intervention.text = intervention_text
+  ) %>%
+  mutate(
+    intervention.text = ifelse(intervention.text=="contrôle", "control", intervention.text)
+  )
+
 write.csv(dfls0, paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_all.rda")) 
 
 dfls0complete = dt_filtered_complete_wash
+dfls0complete = dfls0complete %>%
+  rename(
+    intervention.text = intervention_text
+  ) %>%
+  mutate(
+    intervention.text = ifelse(intervention.text=="contrôle", "control", intervention.text)
+  )
+
+
 write.csv(dfls0complete, paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_completecases_UPDATE.rda")) 
 
 
@@ -1177,5 +1411,110 @@ table_wash_r2 = table1(~ n.householdmember +
                       factor(q21.when.animal.ill.dies.burie.dispose) +
                       factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text), data=d_wash_r2)
 table_wash_r2
+
+# PLOT INTERVENTION TIMES AND SAMPLING TIMES
+# Colours
+palette <- wes_palette("Darjeeling1", n = 5)
+palette2 <- wes_palette("BottleRocket2", n = 1)
+palette3 <- wes_palette("GrandBudapest1", n = 2)[2]
+palette4 <- wes_palette("BottleRocket2", n = 2)[2]
+palette5 = c(palette3, palette[2],palette2,palette[5], palette[4],palette4)
+
+
+# INTERVENTION DATES
+# Round 1: 13 Feb - 26 April 2023
+# Round 2: 8 May - 13 June 2023
+# Round 3: 21 Aug - 3 Nov 2023
+
+village_order <- dfls0 %>%
+  filter(redcap_event_name == "round_0_arm_1") %>%
+  group_by(village_name) %>%
+  dplyr::summarize(earliest_date = min(date.use, na.rm = TRUE), .groups = "drop") %>%
+  arrange(earliest_date)
+village_order
+print(n=22,village_order)
+unique(dfls0$village_name)
+
+# Step 2: Reorder village_name in the original dataframe
+dfls0 <- dfls0 %>%
+  mutate(village_name = factor(village_name,
+                               levels = c("KOKOLO", "BOULPON","POESSI","SOALA","Zimidin","NAZOANGA","SEGUEDIN",
+                                          "DACISSE","KOURIA","GOULOURE","SIGLE",
+                                          "BOLOGHO","SOUM","BALOGHO","LALLE","NANORO","MOGODIN","KALWAKA",
+                                          "RAKALO","POESSE","SOAW","PELLA"))
+  )
+
+
+# Convert the dates to Date type if not already
+vline_dates <- as.Date(c("2023-02-13", "2023-04-26", "2023-05-08", 
+                         "2023-06-13", "2023-08-21", "2023-11-03"))
+
+# Define colors for each pair of shaded areas
+shaded_colors <- c("red", "blue", "black")
+
+# Plot
+p = ggplot(dfls0 %>% filter(intervention.text=="intervention"), aes(x = date.use, fill = redcap_event_name)) +
+  geom_bar() +
+  facet_grid(rows = vars(village_name), scales = "free_x") +  # Use facet_grid with free x-scales
+  labs(x = "Date", y = "Count", title = "Village sampling times",
+       subtitle="Intervention group", fill="Sampling round") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 week", date_labels = "%Y-%m-%d") +  # Set weekly breaks
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom") +
+  # Add shaded areas between pairs of dates with the same colors as the vertical lines
+  geom_rect(data = data.frame(xmin = vline_dates[c(1, 3, 5)], 
+                              xmax = vline_dates[c(2, 4, 6)], 
+                              ymin = -Inf, ymax = Inf,
+                              fill_color = shaded_colors),
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = fill_color),
+            inherit.aes = FALSE, alpha = 0.2) +
+  scale_fill_manual(values = c("round_0_arm_1" = palette5[1], 
+                               "round_1_arm_1" = palette5[2], 
+                               "round_2_arm_1" =palette5[3], 
+                               "round_3_arm_1" = palette5[4])) +
+  # Add vertical lines in the specified colors
+  geom_vline(xintercept = vline_dates[1], col = "red", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[2], col = "red", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[3], col = "blue", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[4], col = "blue", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[5], col = "black", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[6], col = "black", linetype = 2, size = 0.5)
+p   
+
+p2 = ggplot(dfls0 %>% filter(intervention.text == "control"), aes(x = date.use, fill = redcap_event_name)) +
+  geom_bar() +
+  facet_grid(rows = vars(village_name), scales = "free_x") +  # Use facet_grid with free x-scales
+  labs(x = "Date", y = "Count", title = "Village sampling times",
+       subtitle="Control group", fill="Sampling round") +
+  theme_minimal() +
+  scale_x_date(date_breaks = "1 week", date_labels = "%Y-%m-%d") +  # Set weekly breaks
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom") +
+  # Add shaded areas between pairs of dates with the same colors as the vertical lines
+  geom_rect(data = data.frame(xmin = vline_dates[c(1, 3, 5)], 
+                              xmax = vline_dates[c(2, 4, 6)], 
+                              ymin = -Inf, ymax = Inf,
+                              fill_color = shaded_colors),
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax, fill = fill_color),
+            inherit.aes = FALSE, alpha = 0.2) +
+  scale_fill_manual(values = c("round_0_arm_1" = palette5[1], 
+                               "round_1_arm_1" = palette5[2], 
+                               "round_2_arm_1" =palette5[3], 
+                               "round_3_arm_1" = palette5[4])) +
+  # Add vertical lines in the specified colors
+  geom_vline(xintercept = vline_dates[1], col = "red", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[2], col = "red", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[3], col = "blue", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[4], col = "blue", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[5], col = "black", linetype = 2, size = 0.5) +
+  geom_vline(xintercept = vline_dates[6], col = "black", linetype = 2, size = 0.5)
+p2 
+
+combined_plot <- p + p2 + plot_layout(ncol = 2)
+combined_plot
+
+ggsave(file = "./Output/Figures/BF/samplingtimes_villages_UPDATED.pdf", 
+       plot = combined_plot, width = 32, height = 15)  
 
 

@@ -736,7 +736,7 @@ d_lab_r4 = d_lab %>% filter(redcap_event_name=="round_3_arm_1")
 
 # Remove duplicates - round 1
 dup = d_lab_r1$menage_id_member[duplicated(d_lab_r1$menage_id_member)] 
-View(d_lab_r1%>%filter(menage_id_member%in%dup)) # Genuine duplicates
+#View(d_lab_r1%>%filter(menage_id_member%in%dup)) # Genuine duplicates
 #table(duplicated(d_lab_r1$menage_id_member))# 7 duplicates, these are all genuine duplicates and can be removed 
 rm.data.row = d_lab_r1$data.row[duplicated(d_lab_r1$menage_id_member)]
 d_lab_r1 = d_lab_r1 %>%filter(!data.row %in%rm.data.row)
@@ -1050,7 +1050,7 @@ dt = dt %>%
   #filter(rc == 1)  # Keep only correctly ordered cases
 
 table(dt$rc) # 34 not correct
-View(dt%>% filter(rc==0))
+#View(dt%>% filter(rc==0))
 
 
 dt = dt %>%
@@ -1167,6 +1167,7 @@ dt_filtered <- dt %>%
     date = first(date[!is.na(date)]),
     date_conserv = first(date_conserv[!is.na(date_conserv)]),
     date.use = first(date.use[!is.na(date.use)]),
+    days = first(days_since_first_round),
     germe_c = "e.coli",
     esble = ifelse(any(esbl_pos == 1, na.rm = TRUE), 1, 0),  # Set esble = 1 if any observation is positive
     .groups = "drop"
@@ -1178,6 +1179,7 @@ dt %>%
   summarise(
   n = length(unique(menage_id_member))
   )
+
 table(dt_filtered$redcap_event_name)
 
 dt %>% 
@@ -1195,7 +1197,6 @@ dt_filtered %>%
 
 
 # Filtered to those with complete cases
-
 numround = dt_filtered %>% 
   group_by(menage_id_member)%>%
   summarise(
@@ -1260,19 +1261,20 @@ dfls0 = dfls0 %>%
     intervention.text = ifelse(intervention.text=="contrôle", "control", intervention.text)
   )
 
-write.csv(dfls0, paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_all.rda")) 
+save(dfls0, file=paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_all.rda")) 
 
 dfls0complete = dt_filtered_complete_wash
 dfls0complete = dfls0complete %>%
   rename(
     intervention.text = intervention_text
+    
   ) %>%
   mutate(
     intervention.text = ifelse(intervention.text=="contrôle", "control", intervention.text)
   )
 
 
-write.csv(dfls0complete, paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_completecases_UPDATE.rda")) 
+save(dfls0complete, file=paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_completecases_UPDATE.rda")) 
 
 
 #---------------------------------------------------------
@@ -1426,7 +1428,7 @@ palette5 = c(palette3, palette[2],palette2,palette[5], palette[4],palette4)
 # Round 2: 8 May - 13 June 2023
 # Round 3: 21 Aug - 3 Nov 2023
 
-village_order <- dfls0 %>%
+village_order <- dfls0complete %>%
   filter(redcap_event_name == "round_0_arm_1") %>%
   group_by(village_name) %>%
   dplyr::summarize(earliest_date = min(date.use, na.rm = TRUE), .groups = "drop") %>%
@@ -1435,8 +1437,8 @@ village_order
 print(n=22,village_order)
 unique(dfls0$village_name)
 
-# Step 2: Reorder village_name in the original dataframe
-dfls0 <- dfls0 %>%
+# Reorder village_name in the original dataframe
+dfls0complete <- dfls0complete %>%
   mutate(village_name = factor(village_name,
                                levels = c("KOKOLO", "BOULPON","POESSI","SOALA","Zimidin","NAZOANGA","SEGUEDIN",
                                           "DACISSE","KOURIA","GOULOURE","SIGLE",
@@ -1453,7 +1455,7 @@ vline_dates <- as.Date(c("2023-02-13", "2023-04-26", "2023-05-08",
 shaded_colors <- c("red", "blue", "black")
 
 # Plot
-p = ggplot(dfls0 %>% filter(intervention.text=="intervention"), aes(x = date.use, fill = redcap_event_name)) +
+p = ggplot(dfls0complete %>% filter(intervention.text=="intervention"), aes(x = date.use, fill = redcap_event_name)) +
   geom_bar() +
   facet_grid(rows = vars(village_name), scales = "free_x") +  # Use facet_grid with free x-scales
   labs(x = "Date", y = "Count", title = "Village sampling times",
@@ -1482,7 +1484,7 @@ p = ggplot(dfls0 %>% filter(intervention.text=="intervention"), aes(x = date.use
   geom_vline(xintercept = vline_dates[6], col = "black", linetype = 2, size = 0.5)
 p   
 
-p2 = ggplot(dfls0 %>% filter(intervention.text == "control"), aes(x = date.use, fill = redcap_event_name)) +
+p2 = ggplot(dfls0complete %>% filter(intervention.text == "control"), aes(x = date.use, fill = redcap_event_name)) +
   geom_bar() +
   facet_grid(rows = vars(village_name), scales = "free_x") +  # Use facet_grid with free x-scales
   labs(x = "Date", y = "Count", title = "Village sampling times",
@@ -1516,5 +1518,6 @@ combined_plot
 
 ggsave(file = "./Output/Figures/BF/samplingtimes_villages_UPDATED.pdf", 
        plot = combined_plot, width = 32, height = 15)  
+
 
 

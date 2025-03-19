@@ -1162,7 +1162,7 @@ dt_filtered <- dt %>%
     intervention_text = first(intervention_text),
     age = first(age[!is.na(age)]),
     agegr10 = first(agegr10[!is.na(agegr10)]),
-    agegr = first(agegr10[!is.na(agegr)]),
+    agegr = first(agegr[!is.na(agegr)]),
     sexe = first(sexe[!is.na(sexe)]),
     month = first(month),
     rainy = first(rainy),

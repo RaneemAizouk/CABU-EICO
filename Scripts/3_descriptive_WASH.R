@@ -21,6 +21,7 @@ hh = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_WASH_BF.csv"))
 hh_ind = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
 
 load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_all.rda"))
+load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_completecases_UPDATE.rda"))
 
 
 # PREAMBLE
@@ -36,6 +37,7 @@ custom_order <- c(
   "livestock.access.house.binary",
   "animal.excrement.floor.binary"
 )
+
 # Make long format for WASH INDICATORS
 # Convert variables to factor with custom order
 hh_l <- hh %>%
@@ -51,6 +53,229 @@ hh_l <- hh %>%
     values_to = "value"
   ) %>%
   mutate(variable = factor(variable, levels = custom_order))  # Apply custom order
+
+#---------------------------------------------------------
+# DESCRIPTIVES
+#----------------------------------------------------------
+# R0 characteristics 
+table_wash = table1(~ n.householdmember +
+                      n.child.0to5 +
+                      n.households.concession +
+                      main.drinking.water.dry.binary+
+                      main.drinking.water.rainy.binary+ 
+                      cleaning.water.storage.binary+
+                      correct.handwashing.binary+
+                      improved.sanitation.binary+
+                      livestock.access.house.binary+
+                      animal.excrement.floor.binary+
+                      factor(q1.diar.prev.water.pot.covered) +
+                      #q1_diarrhee_prevenu +
+                      factor(q1.diar.prev.no.finger.in.waterglass) +  
+                      factor(q1.diar.prev.utensil.to.take.water.from.pot) + 
+                      #factor(q1_diarrhee_prevenu.filtrer_l_eau_de_boisson) +
+                      factor(q1.diar.prev.cover.food) +
+                      factor(q1.diar.prev.boil.water) + 
+                      factor(q1.diar.prev.filter.water) + 
+                      factor(q1.diar.prev.other)+
+                      factor(q1.diar.prev.cant.be.avoided) + 
+                      factor(q1.diar.prev.dont.know) + 
+                      factor(q2.main.water.source.dry) + 
+                      factor(q3.main.water.source.rainy) + 
+                      factor(q4.cans.storage.water) + 
+                      factor(q5a.cans.storage.water.closed.when.filled) +
+                      factor(q5b.cans.storage.water.closed.wen.empty) + 
+                      factor(q5c.cans.cleaned.before.reuse) +
+                      factor(q6.treatment.water) + 
+                      factor(q7.principle.defication) + 
+                      factor(q8.other.defecation.flush.toiled.septic) + 
+                      factor(q8.other.defecation.pit.latrine.ventilation) + 
+                      factor(q8.other.defecation.pit.latrine.slab) + 
+                      factor(q8.other.defecation.pit.latrine.no.slab) +
+                      factor(q8.other.defecation.open.defecation) + 
+                      factor(q8.other.defecation.other) +                                
+                      #q8.other.defecation.none + 
+                      #q9.shared.toilet.c + 
+                      as.numeric(q10.n.shared.toilet) +
+                      factor(q11.toilet.last.cleaned) + 
+                      factor(q12.disposal.child.stool) + 
+                      factor(q13.disposal.latrine.pit) +
+                      factor(q14.handwashing.product) + 
+                      factor(q15.handwashing.defecation) + 
+                      factor(q16.handwashing.meals) +  
+                      factor(q17.animals.around.household) + 
+                      factor(q18.animal.inside.cow) +  
+                      factor(q18.animal.inside.sheep.goat) + 
+                      factor(q18.animal.inside.pig) + 
+                      factor(q18.animal.inside.donkey.horse) + 
+                      factor(q18.animal.inside.chicken.goose.duck) +  
+                      factor(q18.animal.inside.other) +  
+                      factor(q19.animal.outside.cow) + 
+                      factor(q19.animal.outside.sheep.goat) +
+                      factor(q19.animal.outside.pig) +
+                      factor(q19.animal.outside.donkey.horse) +
+                      factor(q19.animal.outside.chicken.goose.duck) + 
+                      factor(q19.animal.outside.other) +   
+                      factor(q20.animal.excrement.floor) +    
+                      factor(q21.when.animal.ill.treatment.with.vet) + 
+                      factor(q21.when.animal.ill.treatment.without.vet) +
+                      factor(q21.when.animal.ill.sell.bucher) +
+                      factor(q21.when.animal.ill.slaugter.eat.at.home) +     
+                      factor(q21.when.animal.ill.dies.burie.dispose) +
+                      factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_0_arm_1"))
+table_wash
+
+# R2 characteristics 
+table_wash_r2 = table1(~ n.householdmember +
+                         n.child.0to5 +
+                         n.households.concession +
+                         main.drinking.water.dry.binary+
+                         main.drinking.water.rainy.binary+ 
+                         cleaning.water.storage.binary+
+                         correct.handwashing.binary+
+                         improved.sanitation.binary+
+                         livestock.access.house.binary+
+                         animal.excrement.floor.binary+
+                         factor(q1.diar.prev.water.pot.covered) +
+                         #q1_diarrhee_prevenu +
+                         factor(q1.diar.prev.no.finger.in.waterglass) +  
+                         factor(q1.diar.prev.utensil.to.take.water.from.pot) + 
+                         #factor(q1_diarrhee_prevenu.filtrer_l_eau_de_boisson) +
+                         factor(q1.diar.prev.cover.food) +
+                         factor(q1.diar.prev.boil.water) + 
+                         factor(q1.diar.prev.filter.water) + 
+                         factor(q1.diar.prev.other)+
+                         factor(q1.diar.prev.cant.be.avoided) + 
+                         factor(q1.diar.prev.dont.know) + 
+                         factor(q2.main.water.source.dry) + 
+                         factor(q3.main.water.source.rainy) + 
+                         factor(q4.cans.storage.water) + 
+                         factor(q5a.cans.storage.water.closed.when.filled) +
+                         factor(q5b.cans.storage.water.closed.wen.empty) + 
+                         factor(q5c.cans.cleaned.before.reuse) +
+                         factor(q6.treatment.water) + 
+                         factor(q7.principle.defication) + 
+                         factor(q8.other.defecation.flush.toiled.septic) + 
+                         factor(q8.other.defecation.pit.latrine.ventilation) + 
+                         factor(q8.other.defecation.pit.latrine.slab) + 
+                         factor(q8.other.defecation.pit.latrine.no.slab) +
+                         factor(q8.other.defecation.open.defecation) + 
+                         factor(q8.other.defecation.other) +                                
+                         #q8.other.defecation.none + 
+                         #q9.shared.toilet.c + 
+                         as.numeric(q10.n.shared.toilet) +
+                         factor(q11.toilet.last.cleaned) + 
+                         factor(q12.disposal.child.stool) + 
+                         factor(q13.disposal.latrine.pit) +
+                         factor(q14.handwashing.product) + 
+                         factor(q15.handwashing.defecation) + 
+                         factor(q16.handwashing.meals) +  
+                         factor(q17.animals.around.household) + 
+                         factor(q18.animal.inside.cow) +  
+                         factor(q18.animal.inside.sheep.goat) + 
+                         factor(q18.animal.inside.pig) + 
+                         factor(q18.animal.inside.donkey.horse) + 
+                         factor(q18.animal.inside.chicken.goose.duck) +  
+                         factor(q18.animal.inside.other) +  
+                         factor(q19.animal.outside.cow) + 
+                         factor(q19.animal.outside.sheep.goat) +
+                         factor(q19.animal.outside.pig) +
+                         factor(q19.animal.outside.donkey.horse) +
+                         factor(q19.animal.outside.chicken.goose.duck) + 
+                         factor(q19.animal.outside.other) +   
+                         factor(q20.animal.excrement.floor) +    
+                         factor(q21.when.animal.ill.treatment.with.vet) + 
+                         factor(q21.when.animal.ill.treatment.without.vet) +
+                         factor(q21.when.animal.ill.sell.bucher) +
+                         factor(q21.when.animal.ill.slaugter.eat.at.home) +     
+                         factor(q21.when.animal.ill.dies.burie.dispose) +
+                         factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_3_arm_1"))
+table_wash_r2
+
+table_wash_sel = table1(~ n.householdmember +
+                          n.child.0to5 +
+                          age +  
+                          agegr +
+                          sexe +
+                          main.drinking.water.dry.binary+
+                          main.drinking.water.rainy.binary+ 
+                          cleaning.water.storage.binary+
+                          correct.handwashing.binary+
+                          improved.sanitation.binary+
+                          livestock.access.house.binary+
+                          animal.excrement.floor.binary
+                        | factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_0_arm_1"))
+table_wash_sel
+
+table_wash_r2_sel = table1(~ n.householdmember +
+                          n.child.0to5 +
+                          age +  
+                          sexe +
+                          main.drinking.water.dry.binary+
+                          main.drinking.water.rainy.binary+ 
+                          cleaning.water.storage.binary+
+                          correct.handwashing.binary+
+                          improved.sanitation.binary+
+                          livestock.access.house.binary+
+                          animal.excrement.floor.binary
+                        | factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_3_arm_1"))
+table_wash_r2_sel
+
+t1flex(table_wash) %>% 
+  save_as_docx(path="./Output/Tables/BF/wash_baseline.docx")
+t1flex(table_wash_sel) %>% 
+  save_as_docx(path="./Output/Tables/BF/wash_baseline_table1.docx")
+
+write.table(table_wash_sel, "./Output/Tables/BF/wash_baseline_table1.csv", col.names = T, row.names=F, append= F, sep=';')
+
+hh %>% filter(redcap_event_name=="round_0_arm_1") %>%
+  group_by(intervention.text) %>%
+  summarise(n = length(unique(menage_id))
+)
+
+# Number of households per cluster
+hh %>%
+  filter(redcap_event_name == "round_0_arm_1") %>%
+  group_by(intervention.text, village_name) %>%
+  summarise(n = n_distinct(menage_id)) %>%
+  group_by(intervention.text) %>%
+  summarise(
+    median = median(n),
+    q1 = quantile(n, probs = 0.25),
+    q3 = quantile(n, probs = 0.75)
+  )
+
+# Number of individuals per intervention arm
+dfls0 %>%
+  filter(redcap_event_name == "round_0_arm_1") %>%
+  group_by(intervention.text) %>%
+  summarise(n = n_distinct(menage_id_member)) #%>%
+  #group_by(intervention.text) %>%
+  #summarise(
+  #  median = median(n),
+  #  q1 = quantile(n, probs = 0.25),
+  #  q3 = quantile(n, probs = 0.75)
+  #)
+
+dfls0complete %>%
+  filter(redcap_event_name == "round_0_arm_1") %>%
+  group_by(intervention.text) %>%
+  summarise(n = n_distinct(menage_id_member)) #%>%
+#group_by(intervention.text) %>%
+#summarise(
+#  median = median(n),
+#  q1 = quantile(n, probs = 0.25),
+#  q3 = quantile(n, probs = 0.75)
+#)
+
+hh %>%
+  filter(redcap_event_name == "round_0_arm_1") %>%
+  group_by(village_name) %>%
+  summarise(n = n_distinct(menage_id)) %>%
+  summarise(
+    median = median(n),
+    q1 = quantile(n, probs = 0.25),
+    q3 = quantile(n, probs = 0.75)
+  )
 
 # VISUALISE TWO ROUNDS
 #-------------------------------------------------------------------

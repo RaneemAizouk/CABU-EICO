@@ -625,7 +625,7 @@ unique(car_bf$household[car_bf$found_in_wash==0])
 
 # Make dataset with only those household individuals that had a stool sample taken and their individual variables
 d_lab = d %>% filter(!is.na(cs.id.individu)) %>% # ensure just 1 observation per person of whom individual is esbl positive
-  select(data.row, redcap_event_name,cs.id.individu,num.echantillon, menage_id, village, age, agegr10, sexe, date.consent, date.stool.collection)
+  select(data.row, redcap_event_name,cs.id.individu,num.echantillon, menage_id, village, age, agegr10, agegr, sexe, date.consent, date.stool.collection)
 
 # Merge wash patient characteristics with lab data - NEED TO GET IDs IIN THE SAME FORMAT
 which(car_bf$record_id %in% unique(d_lab$cs.id.individu)) # Have to change the format of both to make sure matching can be done
@@ -677,7 +677,7 @@ dups = unique(d_lab$menage_id_member[duplicated(d_lab$menage_id_member)]) # 1157
 new_order <- c("data.row", "redcap_event_name", "village", "cs.id.individu", 
                "num.echantillon", "menage_id_member", "member", "menage_id",
                "date.consent", "date.stool.collection",
-               "age", "agegr10", "sexe")
+               "age", "agegr10","agegr", "sexe")
 
 # Check if all columns exist
 setdiff(new_order, names(d_lab))  # Shows any missing columns
@@ -752,6 +752,7 @@ length(unique(dup2)) # 4 duplicates
 d_lab_r2 = d_lab_r2 %>% filter(!data.row %in%c(345,1012,4185,6776))
 d_lab_r2$age[d_lab_r2$data.row==6775] = 24
 d_lab_r2$agegr10[d_lab_r2$data.row==6775] = "20-29"
+d_lab_r2$agegr[d_lab_r2$data.row==6775] = "18-49"
 d_lab_r2$sexe[d_lab_r2$data.row==6775] = "Female"
 
 # Remove duplicates - round 3
@@ -766,6 +767,7 @@ d_lab = d_lab %>% filter(!data.row%in%c(rm.data.row,rm.data.row.r3))
 d_lab = d_lab %>% filter(!data.row %in%c(345,1012,4185,6776))
 d_lab$age[d_lab$data.row==6775] = 24
 d_lab$agegr10[d_lab$data.row==6775] = "20-29"
+d_lab$agegr[d_lab$data.row==6775] = "18-49"
 d_lab$sexe[d_lab$data.row==6775] = "Female"
 
 # Then for remainder keep first record 
@@ -904,7 +906,8 @@ dt <- d_lab_car_bf_all %>%
   group_by(menage_id_member) %>%
   mutate(
     age = ifelse(is.na(age), first(na.omit(age)), age),
-    agegr10 = ifelse(is.na(agegr10), first(na.omit(as.character(agegr10))), as.character(agegr10))
+    agegr10 = ifelse(is.na(agegr10), first(na.omit(as.character(agegr10))), as.character(agegr10)),
+    agegr = ifelse(is.na(agegr), first(na.omit(as.character(agegr))), as.character(agegr))
   ) %>%
   ungroup()
 
@@ -1159,6 +1162,7 @@ dt_filtered <- dt %>%
     intervention_text = first(intervention_text),
     age = first(age[!is.na(age)]),
     agegr10 = first(agegr10[!is.na(agegr10)]),
+    agegr = first(agegr10[!is.na(agegr)]),
     sexe = first(sexe[!is.na(sexe)]),
     month = first(month),
     rainy = first(rainy),

@@ -85,7 +85,10 @@ pellahh = unique(ses_pella$menage_id)
 ses_nopella = ses %>%filter(!menage_id%in%pellahh)
 
 d_ses = rbind(ses_nopella, ses_pella)
-d_ses = d_ses %>% filter(menage_id%in% unique(ses$menage_id))
+d_ses = d_ses %>% filter(menage_id%in% unique(ses$menage_id)) %>%
+  mutate(ses.quintile = factor(ses.quintile, levels=c("lowest", "second", "third", "fourth", "highest", "Missing")))
+
+table(d_ses$ses.quintile)
 
 ############################################################
 # CLEAN LAB DATA
@@ -155,6 +158,7 @@ d = hh_bf %>% mutate(
   agegr = cut(age,
               breaks = c(0, 5, 18, 50, Inf),
               labels = c("0-4", "5-17", "18-49", "50+"),
+              levels = c("0-4", "5-17", "18-49", "50+"),
               include.lowest = TRUE),
   nmbre_personne_menage = as.numeric(nmbre_personne_menage),
   nbre_enf_0_5ans = as.numeric(nbre_enf_0_5ans),

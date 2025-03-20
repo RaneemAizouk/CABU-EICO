@@ -614,15 +614,15 @@ d_wash_r2 = d %>% filter(is.na(redcap.repeat.instrument) & redcap_event_name=="r
          piam.q6.freq.partic.defication.public) 
 # Denominator data (i.e. people tested for esbl) for r2
 names(d)
-#d_wash_r2 = merge(d_wash_r2, d_wash %>% select(menage_id, n.householdmember,n.child.0to5, n.households.concession, n.households, n.population, ses.quintile), by="menage_id",all.x=T) 
-#d_wash_r2 = d_wash_r2 %>%
-#  mutate(n.householdmember.x = n.householdmember.y,
-#         n.child.0to5.x = n.child.0to5.y,
-#         n.households.concession.x = n.households.concession.y) %>%
-#  select(-c(n.householdmember.y,n.child.0to5.y, n.households.concession.y)) %>%
-#  rename(n.householdmember = "n.householdmember.x",
-#         n.child.0to5 = "n.child.0to5.x",
-#         n.households.concession ="n.households.concession.x")
+d_wash_r2 = merge(d_wash_r2, d_wash %>% select(menage_id, n.householdmember,n.child.0to5, n.households.concession), by="menage_id",all.x=T) 
+d_wash_r2 = d_wash_r2 %>%
+  mutate(n.householdmember.x = n.householdmember.y,
+         n.child.0to5.x = n.child.0to5.y,
+         n.households.concession.x = n.households.concession.y) %>%
+  select(-c(n.householdmember.y,n.child.0to5.y, n.households.concession.y)) %>%
+  rename(n.householdmember = "n.householdmember.x",
+         n.child.0to5 = "n.child.0to5.x",
+         n.households.concession ="n.households.concession.x")
 
 table(d_wash$redcap_event_name)
 
@@ -1328,6 +1328,10 @@ dfls0 = dfls0 %>%
   mutate(
     intervention.text = ifelse(intervention.text=="contrôle", "control", intervention.text)
   )
+
+df = d%>%select(c(menage_id, n.householdmember, n.child.0to5, n.households.concession))%>%filter(!duplicated(menage_id))
+
+dfls0 = left_join(dfls0 %>%select(-c(n.householdmember, n.households.concession)),df) 
 
 save(dfls0, file=paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_all.rda")) 
 

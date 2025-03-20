@@ -54,6 +54,14 @@ hh_l <- hh %>%
   ) %>%
   mutate(variable = factor(variable, levels = custom_order))  # Apply custom order
 
+dfls0 = dfls0 %>% mutate(
+  agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
+)
+
+dfls0complete = dfls0complete %>% mutate(
+  agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
+)
+
 #---------------------------------------------------------
 # DESCRIPTIVES
 #----------------------------------------------------------
@@ -61,6 +69,8 @@ hh_l <- hh %>%
 table_wash = table1(~ n.householdmember +
                       n.child.0to5 +
                       n.households.concession +
+                      #n.households +
+                      ses.quintile +
                       main.drinking.water.dry.binary+
                       main.drinking.water.rainy.binary+ 
                       cleaning.water.storage.binary+
@@ -128,6 +138,8 @@ table_wash
 table_wash_r2 = table1(~ n.householdmember +
                          n.child.0to5 +
                          n.households.concession +
+                         #n.households +
+                         ses.quintile +
                          main.drinking.water.dry.binary+
                          main.drinking.water.rainy.binary+ 
                          cleaning.water.storage.binary+
@@ -188,11 +200,15 @@ table_wash_r2 = table1(~ n.householdmember +
                          factor(q21.when.animal.ill.sell.bucher) +
                          factor(q21.when.animal.ill.slaugter.eat.at.home) +     
                          factor(q21.when.animal.ill.dies.burie.dispose) +
-                         factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_3_arm_1"))
+                         factor(q21.when.animal.ill.dies.eat.at.home)| factor(intervention.text),na.rm=T, data=dfls0%>%filter(redcap_event_name=="round_3_arm_1"))
 table_wash_r2
 
+# FOR PAPER - BASELINE
 table_wash_sel = table1(~ n.householdmember +
                           n.child.0to5 +
+                          n.households + 
+                          n.population +
+                          ses.quintile +
                           age +  
                           agegr +
                           sexe +
@@ -206,8 +222,12 @@ table_wash_sel = table1(~ n.householdmember +
                         | factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_0_arm_1"))
 table_wash_sel
 
+# TABLE 1 - Post intervention
 table_wash_r2_sel = table1(~ n.householdmember +
                           n.child.0to5 +
+                            n.households + 
+                            n.population +
+                            ses.quintile +
                           age +  
                           sexe +
                           main.drinking.water.dry.binary+
@@ -220,12 +240,56 @@ table_wash_r2_sel = table1(~ n.householdmember +
                         | factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_3_arm_1"))
 table_wash_r2_sel
 
+table_wash_sel_complete = table1(~ n.householdmember +
+                          n.child.0to5 +
+                          n.households + 
+                          n.population +
+                          ses.quintile +
+                          age +  
+                          agegr +
+                          sexe +
+                          main.drinking.water.dry.binary+
+                          main.drinking.water.rainy.binary+ 
+                          cleaning.water.storage.binary+
+                          correct.handwashing.binary+
+                          improved.sanitation.binary+
+                          livestock.access.house.binary+
+                          animal.excrement.floor.binary
+                        | factor(intervention.text), data=dfls0complete%>%filter(redcap_event_name=="round_0_arm_1"))
+
+table_wash_sel_r2_complete = table1(~ n.householdmember +
+                                   n.child.0to5 +
+                                   n.households + 
+                                   n.population +
+                                   ses.quintile +
+                                   age +  
+                                   agegr +
+                                   sexe +
+                                   main.drinking.water.dry.binary+
+                                   main.drinking.water.rainy.binary+ 
+                                   cleaning.water.storage.binary+
+                                   correct.handwashing.binary+
+                                   improved.sanitation.binary+
+                                   livestock.access.house.binary+
+                                   animal.excrement.floor.binary
+                                 | factor(intervention.text), data=dfls0complete%>%filter(redcap_event_name=="round_3_arm_1"))
+
+table_wash_sel_complete
+table_wash_sel_r2_complete
+
+table_wash_sel
+
 t1flex(table_wash) %>% 
   save_as_docx(path="./Output/Tables/BF/wash_baseline.docx")
 t1flex(table_wash_sel) %>% 
   save_as_docx(path="./Output/Tables/BF/wash_baseline_table1.docx")
 
 write.table(table_wash_sel, "./Output/Tables/BF/wash_baseline_table1.csv", col.names = T, row.names=F, append= F, sep=';')
+write.table(table_wash_sel_complete, "./Output/Tables/BF/wash_baseline_table1_completecases.csv", col.names = T, row.names=F, append= F, sep=';')
+write.table(table_wash_r2_sel, "./Output/Tables/BF/wash_post-intervention.csv", col.names = T, row.names=F, append= F, sep=';')
+write.table(table_wash_sel_r2_complete, "./Output/Tables/BF/wash_post-intervention_completecases.csv", col.names = T, row.names=F, append= F, sep=';')
+
+# NEED TO CHECK SES LINKAGE AS I HAVE SOME MISSING in ROUND 1!
 
 hh %>% filter(redcap_event_name=="round_0_arm_1") %>%
   group_by(intervention.text) %>%

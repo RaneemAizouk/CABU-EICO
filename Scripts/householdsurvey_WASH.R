@@ -74,21 +74,27 @@ ses = ses %>% select(ménage_id,quintiles) %>%
 
 ses_pella = readxl::read_xlsx(paste0(DirectoryData,"/hdss_ses/SES_Pella.xlsx")) 
 ses_pella = ses_pella %>%
-  select(c(`openhds:householdId`, quintile)) %>%
+  select(c(menage_id, quintile)) %>%
   rename(
-    menage_id = `openhds:householdId`,
     ses.quintile = quintile
   )
 
 pellahh = unique(ses_pella$menage_id)
+# Need to get 
+unique(ses_pella$menage_id)
 
 ses_nopella = ses %>%filter(!menage_id%in%pellahh)
 
 d_ses = rbind(ses_nopella, ses_pella)
-d_ses = d_ses %>% filter(menage_id%in% unique(ses$menage_id)) %>%
-  mutate(ses.quintile = factor(ses.quintile, levels=c("lowest", "second", "third", "fourth", "highest", "Missing")))
 
-table(d_ses$ses.quintile)
+
+
+d_ses = d_ses %>% filter(menage_id%in% unique(ses$menage_id)) %>%
+  mutate(
+    ses.quintile = factor(ses.quintile, levels=c("lowest", "second", "third", "fourth", "highest", NA)))
+
+table(d_ses$ses.quintile, useNA="always") # 27 still not linked
+table(ses$ses.quintile, useNA="always")
 
 ############################################################
 # CLEAN LAB DATA
@@ -1338,6 +1344,16 @@ dfls0complete = dfls0complete %>%
 
 save(dfls0complete, file=paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_completecases_UPDATE.rda")) 
 
+
+# Spit out typos in menage_id pella SES
+typosSES = data.frame(menage_id = ses_pella$menage_id[which(!ses_pella$menage_id%in%c(d$menage_id))], check="typo_ses")
+missingSES = data.frame(menage_id = unique(d$menage_id[which(!d$menage_id%in%c(ses_pella$menage_id) & d$village_name=="PELLA")]),
+                        check="notinses")
+
+checkses = rbind(typosSES, missingSES)
+
+
+write.csv(checkses, paste0(DirectoryDataOut, "./need_checking/ses_pella_ids_to_check.csv")) 
 
 #---------------------------------------------------------
 # DESCRIPTIVES

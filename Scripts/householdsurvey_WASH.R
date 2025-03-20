@@ -35,6 +35,19 @@ DirectoryDataOut <- "./Data/BF/clean"
 villages = readxl::read_xlsx(paste0(DirectoryData, "/bf_villages_cabu.xlsx"))
 names(villages) = c("village", "village_name","intervention_text","ajouter")
 
+village_size = readxl::read_xlsx(paste0(DirectoryData, "/Sélection et randomisation grappes CABU_B Nanoro.xlsx"), sheet=1)
+names(village_size)
+village_size = village_size %>% select(c(`Nom des villages`, ménages, `population active (Mar 2023 update)`))%>%
+  rename(
+    village_name = `Nom des villages`,
+    n.households =  ménages,
+    n.population = `population active (Mar 2023 update)`
+  ) %>%
+  filter(!is.na(village_name))
+head(village_size)
+
+villages = left_join(villages, village_size, by="village_name")
+
 # Lab data
 #car_bf = read.csv(paste0(DirectoryData, "/householdsurvey/CABUBPortageAsymptom_DATA_2024-04-17_1527.csv"), sep=";")
 car_bf = readxl::read_xlsx(paste0(DirectoryData, "/householdsurvey/CABU_WP4_R0-R3.xlsx"))
@@ -49,6 +62,30 @@ names(hh_lab_ids) = c("household", "menage_id", "bras")
 car_bf$village = substr(car_bf$record_id, start = 1, stop = 2)
 car_bf$household = str_extract(car_bf$record_id, "[^-]+")
 car_bf = merge(car_bf, villages, by="village")
+
+# SES data
+ses = readxl::read_xlsx(paste0(DirectoryData,"/hdss_ses/SES_CABU-EICO hh.xlsx"))
+names(ses)
+ses = ses %>% select(ménage_id,quintiles) %>%
+  rename(
+    menage_id = ménage_id,
+    ses.quintile = quintiles
+  )
+
+ses_pella = readxl::read_xlsx(paste0(DirectoryData,"/hdss_ses/SES_Pella.xlsx")) 
+ses_pella = ses_pella %>%
+  select(c(`openhds:householdId`, quintile)) %>%
+  rename(
+    menage_id = `openhds:householdId`,
+    ses.quintile = quintile
+  )
+
+pellahh = unique(ses_pella$menage_id)
+
+ses_nopella = ses %>%filter(!menage_id%in%pellahh)
+
+d_ses = rbind(ses_nopella, ses_pella)
+d_ses = d_ses %>% filter(menage_id%in% unique(ses$menage_id))
 
 ############################################################
 # CLEAN LAB DATA
@@ -310,10 +347,15 @@ table(d$agegr)
 names(d)
 
 # Link village and cluster data to household survey
+hh_bf$data_row = c(1:nrow(hh_bf))
+hh_bf$village = substr(hh_bf$menage_id, start = 1, stop = 2)
 d$data_row = c(1:nrow(d)) # This variable we can use for identifying back those individuals that had a sample taken
 d$village = substr(d$menage_id, start = 1, stop = 2)
-d = merge(d, villages, by="village")
+d = merge(d, villages, by="village") 
 names(d)
+
+#View(hh_bf[which(!hh_bf$data_row %in% d$data_row),]) # Households that start with SB are not linked. Need to check which village these belong to. 20 March 2025: sent email to Franck.
+#unique(villages$village)
 
 names(d) = gsub("_",".",names(d))
 d = d %>%
@@ -322,6 +364,8 @@ d = d %>%
          redcap_event_name = "redcap.event.name")
 
 
+d = left_join(d, d_ses, by=c("menage_id"))
+names(d)
 #-------------------------------------------------------------------------------
 # DEFINE BINARY WASH INDICATORS
 #-------------------------------------------------------------------------------
@@ -422,6 +466,9 @@ d_wash = d %>% select(data.row,menage_id,village, village_name, intervention.tex
                               n.householdmember, 
                               n.child.0to5,
                               n.households.concession,
+                              n.households,
+                              n.population,
+                              ses.quintile,
                               main.drinking.water.dry.binary,
                               main.drinking.water.rainy.binary, 
                               cleaning.water.storage.binary,
@@ -492,6 +539,9 @@ d_wash_r2 = d %>% filter(is.na(redcap.repeat.instrument) & redcap_event_name=="r
          n.householdmember, 
          n.child.0to5,
          n.households.concession,
+         n.households,
+         n.population,
+         ses.quintile,
          main.drinking.water.dry.binary,
          main.drinking.water.rainy.binary, 
          cleaning.water.storage.binary,
@@ -553,16 +603,16 @@ d_wash_r2 = d %>% filter(is.na(redcap.repeat.instrument) & redcap_event_name=="r
          piam.q6.freq.partic.defication.adhoc,
          piam.q6.freq.partic.defication.public) 
 # Denominator data (i.e. people tested for esbl) for r2
-
-d_wash_r2 = merge(d_wash_r2, d_wash %>% select(menage_id, n.householdmember,n.child.0to5, n.households.concession), by="menage_id",all.x=T) 
-d_wash_r2 = d_wash_r2 %>%
-  mutate(n.householdmember.x = n.householdmember.y,
-         n.child.0to5.x = n.child.0to5.y,
-         n.households.concession.x = n.households.concession.y) %>%
-  select(-c(n.householdmember.y,n.child.0to5.y, n.households.concession.y)) %>%
-  rename(n.householdmember = "n.householdmember.x",
-         n.child.0to5 = "n.child.0to5.x",
-         n.households.concession ="n.households.concession.x")
+names(d)
+#d_wash_r2 = merge(d_wash_r2, d_wash %>% select(menage_id, n.householdmember,n.child.0to5, n.households.concession, n.households, n.population, ses.quintile), by="menage_id",all.x=T) 
+#d_wash_r2 = d_wash_r2 %>%
+#  mutate(n.householdmember.x = n.householdmember.y,
+#         n.child.0to5.x = n.child.0to5.y,
+#         n.households.concession.x = n.households.concession.y) %>%
+#  select(-c(n.householdmember.y,n.child.0to5.y, n.households.concession.y)) %>%
+#  rename(n.householdmember = "n.householdmember.x",
+#         n.child.0to5 = "n.child.0to5.x",
+#         n.households.concession ="n.households.concession.x")
 
 table(d_wash$redcap_event_name)
 

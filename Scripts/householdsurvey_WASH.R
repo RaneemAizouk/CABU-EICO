@@ -1332,7 +1332,7 @@ dfls0 = dfls0 %>%
 df = d%>%select(c(menage_id, n.householdmember, n.child.0to5, n.households.concession))%>%filter(!duplicated(menage_id))
 
 dfls0 = left_join(dfls0 %>%select(-c(n.householdmember, n.households.concession)),df) 
-
+write.csv(dfls0, paste0(DirectoryDataOut, "./FINAL_FOR_SHARING/Household_stool_WASH_BF_long.csv")) 
 save(dfls0, file=paste0(DirectoryDataOut, "./use_in_analyses/bf_esbl0123_long_all.rda")) 
 
 dfls0complete = dt_filtered_complete_wash

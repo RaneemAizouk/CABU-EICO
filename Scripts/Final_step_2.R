@@ -1,6 +1,5 @@
 
 #####Library loading 
-###
 
 library(ggplot2)
 library(rstan)

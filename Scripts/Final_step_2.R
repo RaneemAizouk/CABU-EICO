@@ -12,7 +12,7 @@ library(GGally)  # Load the package
 library(lubridate)
 # load dataset----------------------------
 #load("/Users/raizouk/Desktop/Oxford/Projects/data_set/bf_esbl0123_long_all.rda")
-load("./Data/latest_data_version/bf_esbl0123_long_all.rda")
+load("/Users/raizouk/Desktop/Oxford/Projects/data_set/bf_esbl0123_long_all.rda")
 data <- dfls0
 #print(ls())
 library(readr)
@@ -89,8 +89,8 @@ if (nrow(missing_after_fill) > 0) {
 # 5. Report how many individuals survived this filtering
 num_individuals_after_filling <- n_distinct(data_filled$menage_id_member)
 print(paste("Number of individuals after filling missing age and sexe:", num_individuals_after_filling))
-s<- unique(length(villages))
-print(s)
+# s<- unique(length(villages))
+# print(s)
 
 ###################################################
 ###If we want to use the full data set just filter out this section.
@@ -631,7 +631,8 @@ parameters {
   real beta_int1;   // first‐intervention effect
   real beta_int2;   // second‐intervention effect
 
-
+   real beta_season_1_2;
+   real beta_season_2_1;
 
 
 }
@@ -691,7 +692,8 @@ model {
   // Intervention‐specific effects (first and second)
   beta_int1 ~ normal(0, 1);
   beta_int2 ~ normal(0, 1);
-
+  beta_season_1_2~ normal(0, 1);
+  beta_season_2_1~ normal(0, 1);
   // ─────────────────────────────────────────────────────────────────────────────
   // LIKELIHOOD: FOR EACH PAIR OF SUCCESSIVE OBSERVATIONS (n−1 → n) WITHIN A PERSON
   // ─────────────────────────────────────────────────────────────────────────────

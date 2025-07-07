@@ -348,33 +348,14 @@ fit_test <- sampling(
 )
 print(fit_test )
 
-# stan_fit <- sampling(stan_model, data = stan_data, 
-#                      iter = 500, warmup = 250, chains = 1, cores = 1,
-#                      control = list(adapt_delta = 0.99, max_treedepth = 15),
-#                      verbose = TRUE)
-# 
-df <- data.frame(
-  date = as.Date(global_interval_start_numeric + X * 365, origin = "1970-01-01"),
-  Y_hat_mean = apply(as.matrix(fit_test, pars = "Y_hat_1_2_out"), 2, mean)
-)
-
-ggplot(df, aes(date, Y_hat_mean)) +
-  geom_line(color = "steelblue") +
-  theme_minimal() +
-  labs(title = "Estimated Seasonality Spline (Y_hat_1_2)")
 
 
-
-
-#####
-library(shinystan)
-shinystan_obj <- as.shinystan(fit_test)
-launch_shinystan(shinystan_obj)
-
-#####################
 
 
 ###############
+###R2PLOT
+library(ggplot2)
+
 # Assuming you have Stan output already extracted
 posterior_samples <- rstan::extract(fit_test)
 
@@ -423,7 +404,8 @@ hist(tau_1_2_samples, breaks = 50, main = "Posterior of tau_1_2", xlab = "tau_1_
 
 # Optional: summary of a_raw_1_2 coefficients
 apply(a_raw_1_2_samples, 2, function(x) quantile(x, probs = c(0.025, 0.5, 0.975)))
-
+####################
+##R3plot
 library(dplyr)
 library(lubridate)
 library(ggplot2)
@@ -450,6 +432,7 @@ observation_df %>%
     y = "Prevalence"
   )
 ##################################
+###R4plot
 library(splines2)
 library(ggplot2)
 library(reshape2)
@@ -491,6 +474,7 @@ ggplot(long_df, aes(x = X, y = value, color = variable)) +
   ) +
   theme(legend.position = "none")
 ######################################
+###R5plot
 # Extract seasonal effect samples from Stan fit
 seasonal_effect_samples <- rstan::extract(fit_test, pars = "seasonal_effect_1_2")$seasonal_effect_1_2
 
@@ -537,6 +521,7 @@ ggplot(df_seasonal, aes(x = time, y = mean)) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ################################
+#R6plot
 library(dplyr)
 library(lubridate)
 library(ggplot2)
@@ -592,5 +577,28 @@ ggplot() +
     y = "Log Hazard (Effect) / Prevalence"
   )
 #################
+##R7plot
 hist(posterior_samples$beta_season_1_2, breaks = 30, main = "Posterior of β_season_1_2")
 ##########
+
+library(shinystan)
+shinystan_obj <- as.shinystan(fit_test)
+launch_shinystan(shinystan_obj)
+
+#####################
+####Save the results
+# Save the compiled stan_model object
+save(stan_model, file = "stan_model.rda")
+
+# Save the fitted model object
+save(fit_test, file = "fit_test.rda")
+
+# Save multiple objects (e.g., data and summaries)
+save(stan_data_small, spline_summary, file = "stan_data_summary.rda")
+
+
+load("/Users/raizouk/Desktop/CABU-EICO/Simulated data outcome/stan_model.rda")
+print(fit_test, probs = c(0.025, 0.5, 0.975))
+summary(fit_test)$summary
+
+

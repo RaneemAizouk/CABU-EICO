@@ -34,7 +34,7 @@ X <- (X - median(X)) / 365
 
 interval_starts_date <- as.Date(interval_starts, origin = "1970-01-01")
 interval_ends_date <- as.Date(interval_ends, origin = "1970-01-01")
-
+print(X)
 # ------------------------------
 # Define individuals and households
 # ------------------------------
@@ -284,7 +284,7 @@ transformed parameters {
 
   real tau_2_1 = exp(log_tau_raw_2_1);
   row_vector[num_basis] a_2_1 = a_raw_2_1 * tau_2_1;
-  vector[num_data] Y_hat_raw_2_1 = to_vector(a_2_1 * B);
+  vector[num_data] Y_hat_raw_2_1 =  to_vector(a_2_1 * B);
   vector[num_data] Y_hat_2_1 = (Y_hat_raw_2_1 - mean(Y_hat_raw_2_1)) / sd(Y_hat_raw_2_1);  // normalize
 }
 
@@ -347,6 +347,23 @@ fit_test <- sampling(
   seed = 123
 )
 print(fit_test )
+############
+####Save the results
+# Save the compiled stan_model object
+save(stan_model, file = "stan_model.rda")
+
+# Save the fitted model object
+save(fit_test, file = "fit_test.rda")
+
+# Save multiple objects (e.g., data and summaries)
+save(stan_data_small, spline_summary, file = "stan_data_summary.rda")
+
+
+load("/Users/raizouk/Desktop/CABU-EICO/Simulated data outcome/stan_model.rda")
+print(fit_test, probs = c(0.025, 0.5, 0.975))
+summary(fit_test)$summary
+
+
 
 
 
@@ -383,27 +400,7 @@ ggplot(spline_summary, aes(x = time, y = mean_1_2)) +
        x = "Time (scaled years)", y = "Log Rate") +
   theme_minimal()
 ################################
-posterior_samples <- rstan::extract(fit_test)
 
-# For a_raw_1_2
-a_raw_1_2_samples <- posterior_samples$a_raw_1_2  # matrix: iterations × num_basis
-
-# For tau_1_2
-tau_1_2_samples <- exp(posterior_samples$log_tau_raw_1_2)  # since log_tau was sampled
-# Mean, SD, 95% Credible Interval for tau
-summary_tau <- c(
-  mean = mean(tau_1_2_samples),
-  sd = sd(tau_1_2_samples),
-  quantile(tau_1_2_samples, probs = c(0.025, 0.975))
-)
-
-print(summary_tau)
-
-# Plot histogram of tau
-hist(tau_1_2_samples, breaks = 50, main = "Posterior of tau_1_2", xlab = "tau_1_2")
-
-# Optional: summary of a_raw_1_2 coefficients
-apply(a_raw_1_2_samples, 2, function(x) quantile(x, probs = c(0.025, 0.5, 0.975)))
 ####################
 ##R3plot
 library(dplyr)
@@ -521,6 +518,7 @@ ggplot(df_seasonal, aes(x = time, y = mean)) +
   theme_minimal(base_size = 14) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ################################
+###The posterior effect is on a log-hazard scale, while prevalence is bounded between 0 and 1.
 #R6plot
 library(dplyr)
 library(lubridate)
@@ -586,19 +584,118 @@ shinystan_obj <- as.shinystan(fit_test)
 launch_shinystan(shinystan_obj)
 
 #####################
-####Save the results
-# Save the compiled stan_model object
-save(stan_model, file = "stan_model.rda")
+# Load required packages
+library(dplyr)
+library(lubridate)
+library(ggplot2)
 
-# Save the fitted model object
-save(fit_test, file = "fit_test.rda")
+# Extract posterior samples from your Stan model
+posterior_samples <- rstan::extract(fit_test)
 
-# Save multiple objects (e.g., data and summaries)
-save(stan_data_small, spline_summary, file = "stan_data_summary.rda")
+# Check structure to confirm seasonal effect exists
+str(posterior_samples$seasonal_effect_1_2)
+
+# Compute summaries over MCMC draws (66 time points assumed)
+seasonal_mean <- apply(posterior_samples$seasonal_effect_1_2, 2, mean)
+seasonal_lwr  <- apply(posterior_samples$seasonal_effect_1_2, 2, quantile, probs = 0.025)
+seasonal_upr  <- apply(posterior_samples$seasonal_effect_1_2, 2, quantile, probs = 0.975)
+
+# ---- Time axis construction ----
+# Create time vector X with 66 monthly steps (~5.5 years)
+X <- seq(0, length.out = length(seasonal_mean)) / 12  # Time in years
+
+# Ensure global_interval_start is a Date object
+global_interval_start <- as.Date("2010-01-01")
+
+# Compute X_dates as midpoints of 28-day intervals starting from global start
+X_dates <- global_interval_start + round(X * 365)
+
+# ---- Create posterior effect dataframe ----
+posterior_df <- data.frame(
+  date = X_dates,
+  seasonal_mean = seasonal_mean,
+  seasonal_lwr = seasonal_lwr,
+  seasonal_upr = seasonal_upr
+)
+
+# ---- Compute monthly observed prevalence ----
+# Use `visit_date` which is a Date field
+monthly_prevalence <- observation_df %>%
+  mutate(year_month = floor_date(visit_date, "month")) %>%
+  group_by(year_month) %>%
+  summarise(
+    prevalence = mean(observed_state),
+    .groups = "drop"
+  )
+
+# ---- Plot posterior effect and observed prevalence ----
+ggplot() +
+  geom_ribbon(data = posterior_df, aes(x = date, ymin = seasonal_lwr, ymax = seasonal_upr),
+              fill = "steelblue", alpha = 0.2) +
+  geom_line(data = posterior_df, aes(x = date, y = seasonal_mean),
+            color = "blue", size = 1.2) +
+  geom_point(data = monthly_prevalence, aes(x = year_month, y = prevalence),
+             color = "darkred", size = 2) +
+  geom_line(data = monthly_prevalence, aes(x = year_month, y = prevalence),
+            color = "darkred", linetype = "dashed") +
+  scale_x_date(date_breaks = "2 months", date_labels = "%b\n%Y") +
+  labs(
+    title = "Posterior Seasonal Effect vs. Observed Prevalence",
+    x = "Month",
+    y = "Log Hazard (Effect) / Prevalence"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+###The posterior effect is on a log-hazard scale, while prevalence is bounded between 0 and 1.
+# Normalize both to 0–1 for plotting (visual only)
+posterior_df <- posterior_df %>%
+  mutate(seasonal_scaled = (seasonal_mean - min(seasonal_mean)) / (max(seasonal_mean) - min(seasonal_mean)))
+
+monthly_prevalence <- monthly_prevalence %>%
+  mutate(prevalence_scaled = (prevalence - min(prevalence)) / (max(prevalence) - min(prevalence)))
+ggplot() +
+  geom_line(data = posterior_df, aes(x = date, y = seasonal_scaled), color = "blue", size = 1.2) +
+  geom_line(data = monthly_prevalence, aes(x = year_month, y = prevalence_scaled), color = "darkred", linetype = "dashed") +
+  scale_x_date(date_breaks = "2 months", date_labels = "%b\n%Y") +
+  labs(title = "Seasonal Effect (Scaled) vs. Prevalence (Scaled)",
+       x = "Month",
+       y = "Scaled Values (0–1)") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+######
+da = observation_df %>% 
+  group_by(visit_date) %>%
+  summarise(n = sum(observed_state))
+
+ggplot(da, aes(x=visit_date, y=n))+
+  geom_point() +geom_line()
+#####################################################
 
 
-load("/Users/raizouk/Desktop/CABU-EICO/Simulated data outcome/stan_model.rda")
-print(fit_test, probs = c(0.025, 0.5, 0.975))
-summary(fit_test)$summary
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

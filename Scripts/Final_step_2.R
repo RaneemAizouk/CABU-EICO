@@ -11,7 +11,8 @@ library(GGally)  # Load the package
 library(lubridate)
 # load dataset----------------------------
 #load("/Users/raizouk/Desktop/Oxford/Projects/data_set/bf_esbl0123_long_all.rda")
-load("/Users/raizouk/Desktop/Oxford/Projects/data_set/bf_esbl0123_long_all.rda")
+load("/Users/raizouk/Desktop/bf_esbl0123_long_all.rda")
+#load("./Data/latest_data_version/bf_esbl0123_long_all.rda")
 data <- dfls0
 #print(ls())
 library(readr)
@@ -397,11 +398,8 @@ stan_data <- list(
   max_middle = max_middle,
   Intervention_start_date = as.numeric(data_complete$Intervention_start_date),
   intervention_date  = as.numeric(data_complete$intervention_date),
-  intervention_date2 = data_complete$intervention_date2,
-  max_middle = max_middle
-  
-  
-)
+  intervention_date2 = data_complete$intervention_date2
+ )
 # Convert Intervention_start_date to numeric (days since 1970-01-01)
 
 # Check structure
@@ -599,62 +597,75 @@ transformed data {
  
 
 parameters {
+  // Transition rate base parameters (non-centered)
   real q_1_2_raw;
   real q_2_1_raw;
 
- 
+  real<lower=0> sigma_q_1_2;
+  real<lower=0> sigma_q_2_1;
+
+  // Random effects
+  vector[H] u_raw;
+  real<lower=0> sigma_u;
+
+  // Covariate effects
   real beta_1_2_age;
   real beta_2_1_age;
   real beta_1_2_sexe;
   real beta_2_1_sexe;
 
-  vector[H] u_raw;
+  // Intervention and seasonal covariate effects
+  real beta_int1;             // first intervention
+  real beta_int2;             // second intervention
+  real beta_season_1_2;
+  real beta_season_2_1;
 
-  real<lower=0> sigma_u;
-  real<lower=0> sigma_q_1_2;
-  real<lower=0> sigma_q_2_1;
-
-  // Infection spline
-  row_vector[num_basis] a_raw_1_2;
-
-
+  // Infection spline (periodic)
+  row_vector[num_basis - 3] a_raw_1_2_free;
   real log_tau_raw_1_2;
 
-  // Recovery spline
-  row_vector[num_basis] a_raw_2_1;
-  real a0_raw_2_1;
-
+  // Recovery spline (periodic)
+  row_vector[num_basis - 3] a_raw_2_1_free;
   real log_tau_raw_2_1;
 
+  // Noise parameter for observation model
   real<lower=0> sigma;
-  real beta_int1;   // first‐intervention effect
-  real beta_int2;   // second‐intervention effect
-
-   real beta_season_1_2;
-   real beta_season_2_1;
-
-
 }
 
+
 transformed parameters {
+  // -- Base parameters --
   real q_1_2_base = -4.79 + q_1_2_raw * sigma_q_1_2;
   real q_2_1_base = -4.71 + q_2_1_raw * sigma_q_2_1;
   vector[H] u = u_raw * sigma_u;
 
-  // Infection spline
+  // -- Periodic B-spline coefficients: a_raw_1_2 --
+  row_vector[num_basis] a_raw_1_2;
+
+  for (i in 1:(num_basis - 3))
+    a_raw_1_2[i] = a_raw_1_2_free[i];
+
+  for (j in 1:3)
+    a_raw_1_2[num_basis - 3 + j] = a_raw_1_2_free[j];
+
   real tau_1_2 = exp(log_tau_raw_1_2);
- 
   row_vector[num_basis] a_1_2 = a_raw_1_2 * tau_1_2;
-  vector[num_data] Y_hat_1_2 =  to_vector(a_1_2 * B);
+  vector[num_data] Y_hat_1_2 = to_vector(a_1_2 * B);
 
-  // Recovery spline
+  // -- Periodic B-spline coefficients: a_raw_2_1 --
+  row_vector[num_basis] a_raw_2_1;
+
+  for (i in 1:(num_basis - 3))
+    a_raw_2_1[i] = a_raw_2_1_free[i];
+
+  for (j in 1:3)
+    a_raw_2_1[num_basis - 3 + j] = a_raw_2_1_free[j];
+
   real tau_2_1 = exp(log_tau_raw_2_1);
-
   row_vector[num_basis] a_2_1 = a_raw_2_1 * tau_2_1;
-  vector[num_data] Y_hat_2_1 =  to_vector(a_2_1 * B);
-
- 
+  vector[num_data] Y_hat_2_1 = to_vector(a_2_1 * B);
 }
+
 
 
 
@@ -889,210 +900,151 @@ model {
       // (first/middle/last) with the appropriate interventions flags.
       target += log(
         P_total[ observed_state[n-1], observed_state[n] ] + 1e-9
-      );
+     );
     }
   }
 }
 
 generated quantities {
-  vector[N]             log_lambda_1_2_out;
-  vector[N]             log_lambda_2_1_out;
-  vector[num_data]      Y_hat_1_2_out;
-  vector[num_data]      Y_hat_2_1_out;
-  int                   y_rep[N];
-  
+  vector[N]        log_lambda_1_2_out;
+  vector[N]        log_lambda_2_1_out;
+  vector[num_data] Y_hat_1_2_out;
+  vector[num_data] Y_hat_2_1_out;
+   int              y_rep[N];
+
   // Expose spline parameters
+  row_vector[num_basis] a_1_2_out = a_1_2;
+  row_vector[num_basis] a_2_1_out = a_2_1;
 
-  row_vector[num_basis] a_1_2_out  = a_1_2;
-  row_vector[num_basis] a_2_1_out  = a_2_1;
-  
   // Recompute seasonal splines
-  Y_hat_1_2_out =  to_vector(a_1_2 * B);
-  Y_hat_2_1_out =  to_vector(a_2_1 * B);
-  
+  Y_hat_1_2_out = to_vector(a_1_2 * B);
+  Y_hat_2_1_out = to_vector(a_2_1 * B);
+
   for (n in 1:N) {
-    // 1) Baseline log‐rates (same as in transformed parameters)
-real log12 = q_1_2_base
-+ u[HouseID[n]]
-+ beta_1_2_age  * age[n]
-+ beta_1_2_sexe * sexe[n];
-real log21 = q_2_1_base
-+ u[HouseID[n]]
-+ beta_2_1_age  * age[n]
-+ beta_2_1_sexe * sexe[n];
+    // (1) Compute baseline log-rates
+    real log12 = q_1_2_base
+                 + u[HouseID[n]]
+                 + beta_1_2_age * age[n]
+                 + beta_1_2_sexe * sexe[n];
+    real log21 = q_2_1_base
+                 + u[HouseID[n]]
+                 + beta_2_1_age * age[n]
+                 + beta_2_1_sexe * sexe[n];
 
-// First observation of each individual: no transition
-if (n == 1 || menage_id_member[n] != menage_id_member[n-1]) {
-  y_rep[n] = -1;  // no simulated transition
-  // Record the “initial” rates (use idx_first to pick spline)
-  int i0 = idx_first[n];
-  log_lambda_1_2_out[n] = log12 + Y_hat_1_2_out[i0];
-  log_lambda_2_1_out[n] = log21 + Y_hat_2_1_out[i0];
-  continue;
+    // (2) First observation of each individual: no transition
+    if (n == 1 || menage_id_member[n] != menage_id_member[n - 1]) {
+      y_rep[n] = 1;  // placeholder state
+      int i0 = idx_first[n];
+      log_lambda_1_2_out[n] = log12 + Y_hat_1_2_out[i0];
+      log_lambda_2_1_out[n] = log21 + Y_hat_2_1_out[i0];
+      continue;
+    }
+
+    // (3) Initialize transition matrix
+    matrix[2, 2] P_total = diag_matrix(rep_vector(1.0, 2));
+    real t_star1 = intervention_date[n];
+    real t_star2 = intervention_date2[n];
+
+    // ───── (A) FIRST SUBINTERVAL ─────
+    if (first_subinterval[n] > 0) {
+      int i1 = idx_first[n];
+      real s12 = Y_hat_1_2_out[i1];
+      real s21 = Y_hat_2_1_out[i1];
+      real t0 = date_use[n - 1];
+      real t1 = t0 + first_subinterval[n] - 1;
+
+      if (t0 < t_star1 && t_star1 < t1) {
+        real d1a = t_star1 - t0;
+        real d1b = t1 - t_star1 + 1;
+        P_total *= transition_matrix(d1a,
+          exp(log12 + beta_season_1_2 * s12),
+          exp(log21 + beta_season_2_1 * s21));
+        int flag1 = 1;
+        int flag2 = ((t_star1 + t1) / 2 >= t_star2) ? 1 : 0;
+        P_total *= transition_matrix(d1b,
+          exp(log12 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_1_2 * s12),
+          exp(log21 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_2_1 * s21));
+      } else {
+        real midpoint = (t0 + t1) / 2;
+        int flag1 = (midpoint >= t_star1) ? 1 : 0;
+        int flag2 = (midpoint >= t_star2) ? 1 : 0;
+        P_total *= transition_matrix(first_subinterval[n],
+          exp(log12 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_1_2 * s12),
+          exp(log21 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_2_1 * s21));
+      }
+    }
+
+    // ───── (B) MIDDLE SUBINTERVALS ─────
+    for (m in 1:num_middle_subintervals[n]) {
+      int im = idx_middle[n, m];
+      real s12m = Y_hat_1_2_out[im];
+      real s21m = Y_hat_2_1_out[im];
+      real t0m = global_interval_start
+                 + (global_interval_index_start[n] + m - 1) * interval_length;
+      real t1m = t0m + interval_length - 1;
+
+      if (t0m < t_star1 && t_star1 < t1m) {
+        real d2a = t_star1 - t0m;
+        real d2b = t1m - t_star1 + 1;
+        P_total *= transition_matrix(d2a,
+          exp(log12 + beta_season_1_2 * s12m),
+          exp(log21 + beta_season_2_1 * s21m));
+        int flag1 = 1;
+        int flag2 = ((t_star1 + t1m) / 2 >= t_star2) ? 1 : 0;
+        P_total *= transition_matrix(d2b,
+          exp(log12 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_1_2 * s12m),
+          exp(log21 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_2_1 * s21m));
+      } else {
+        real midpoint = (t0m + t1m) / 2;
+        int flag1 = (midpoint >= t_star1) ? 1 : 0;
+        int flag2 = (midpoint >= t_star2) ? 1 : 0;
+        P_total *= transition_matrix(interval_length,
+          exp(log12 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_1_2 * s12m),
+          exp(log21 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_2_1 * s21m));
+      }
+    }
+
+    // ───── (C) LAST SUBINTERVAL ─────
+    if (last_subinterval[n] > 0) {
+      int il = idx_last[n];
+      real s12l = Y_hat_1_2_out[il];
+      real s21l = Y_hat_2_1_out[il];
+      real t1l = date_use[n];
+      real t0l = t1l - last_subinterval[n] + 1;
+
+      if (t0l < t_star2 && t_star2 < t1l) {
+        real d3a = t_star2 - t0l;
+        real d3b = t1l - t_star2 + 1;
+        P_total *= transition_matrix(d3a,
+          exp(log12 + 1 * beta_int1 + 0 * beta_int2 + beta_season_1_2 * s12l),
+          exp(log21 + 1 * beta_int1 + 0 * beta_int2 + beta_season_2_1 * s21l));
+        P_total *= transition_matrix(d3b,
+          exp(log12 + 1 * beta_int1 + 1 * beta_int2 + beta_season_1_2 * s12l),
+          exp(log21 + 1 * beta_int1 + 1 * beta_int2 + beta_season_2_1 * s21l));
+      } else {
+        real midpoint = (t0l + t1l) / 2;
+        int flag1 = 1;
+        int flag2 = (midpoint >= t_star2) ? 1 : 0;
+        P_total *= transition_matrix(last_subinterval[n],
+          exp(log12 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_1_2 * s12l),
+          exp(log21 + flag1 * beta_int1 + flag2 * beta_int2 + beta_season_2_1 * s21l));
+      }
+    }
+   // (4) Draw the next state
+     vector[2] probs = to_vector(P_total[observed_state[n - 1]]);
+     real total = sum(probs);
+if (is_nan(total) || total <= 0 || is_nan(probs[1]) || is_nan(probs[2])) {
+  y_rep[n] = 0;  // fallback or placeholder
+} else {
+  y_rep[n] = categorical_rng(probs / total);
 }
 
-// Otherwise, build P_total exactly as in the model block:
-  matrix[2,2] P_total = diag_matrix(rep_vector(1.0, 2));
 
-real t_star1 = intervention_date[n];   // first intervention date
-real t_star2 = intervention_date2[n];  // second intervention date
-
-// ─────────────────────────────────────────────────────────────────────
-// (A) FIRST SUBINTERVAL: [date_use[n−1], date_use[n−1] + first_subinterval[n] − 1]
-// ─────────────────────────────────────────────────────────────────────
-if (first_subinterval[n] > 0) {
-  int    i1  = idx_first[n];
-  real   s12 = Y_hat_1_2_out[i1];
-  real   s21 = Y_hat_2_1_out[i1];
-  
-  real t0 = date_use[n-1];
-  real t1 = t0 + first_subinterval[n] - 1;
-  
-  // (A.1) split if t_star1 lies inside
-  if (t0 < t_star1 && t_star1 < t1) {
-    real d1a = t_star1 - t0;
-    real d1b = t1      - t_star1 + 1;
-    
-    // Pre‐first: no interventions
-    P_total *= transition_matrix(
-      d1a,
-      exp(log12 + 0*beta_int1 + 0*beta_int2 + beta_season_1_2 * s12),
-      exp(log21 + 0*beta_int1 + 0*beta_int2 + beta_season_2_1* s21)
-    );
-    
-    // Post‐first (but still pre‐second)
-    real midpoint_post1 = (t_star1 + t1) / 2;
-    int  flag1_post1    = 1;
-    int  flag2_post1    = (midpoint_post1 >= t_star2) ? 1 : 0;
-    
-    P_total *= transition_matrix(
-      d1b,
-      exp(log12 + flag1_post1*beta_int1 + flag2_post1*beta_int2 + beta_season_1_2 * s12),
-      exp(log21 + flag1_post1*beta_int1 + flag2_post1*beta_int2 + beta_season_2_1* s21)
-    );
-    
-  } else {
-    // (A.2) no split by t_star1
-    real midpoint1 = (t0 + t1) / 2;
-    int  flag1_1   = (midpoint1 >= t_star1) ? 1 : 0;
-    int  flag2_1   = (midpoint1 >= t_star2) ? 1 : 0;
-    
-    P_total *= transition_matrix(
-      first_subinterval[n],
-      exp(log12 + flag1_1*beta_int1 + flag2_1*beta_int2 + beta_season_1_2 * s12),
-      exp(log21 + flag1_1*beta_int1 + flag2_1*beta_int2 + beta_season_2_1*s21)
-    );
+    // (5) Save log-hazards for output
+    log_lambda_1_2_out[n] = log12 + Y_hat_1_2_out[idx_last[n]];
+    log_lambda_2_1_out[n] = log21 + Y_hat_2_1_out[idx_last[n]];
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────
-// (B) MIDDLE SUBINTERVALS
-// ─────────────────────────────────────────────────────────────────────
-for (m in 1:num_middle_subintervals[n]) {
-  int    im   = idx_middle[n,m];
-  real   s12m = Y_hat_1_2_out[im];
-  real   s21m = Y_hat_2_1_out[im];
-  
-  real t0m = global_interval_start
-  + (global_interval_index_start[n] + m - 1) * interval_length;
-  real t1m = t0m + interval_length - 1;
-  
-  // (B.1) if t_star1 falls inside this bin
-  if (t0m < t_star1 && t_star1 < t1m) {
-    real d2a = t_star1 - t0m;
-    real d2b = t1m     - t_star1 + 1;
-    
-    // Pre‐first in this middle bin
-    P_total *= transition_matrix(
-      d2a,
-      exp(log12 + 0*beta_int1 + 0*beta_int2 +beta_season_1_2 * s12m),
-      exp(log21 + 0*beta_int1 + 0*beta_int2 + beta_season_2_1* s21m)
-    );
-    
-    // Post‐first (but pre‐second)
-    real midpoint_post1m = (t_star1 + t1m) / 2;
-    int  flag1_post1m    = 1;
-    int  flag2_post1m    = (midpoint_post1m >= t_star2) ? 1 : 0;
-    
-    P_total *= transition_matrix(
-      d2b,
-      exp(log12 + flag1_post1m*beta_int1 + flag2_post1m*beta_int2 +beta_season_1_2 *  s12m),
-      exp(log21 + flag1_post1m*beta_int1 + flag2_post1m*beta_int2 +beta_season_2_1* s21m)
-    );
-    
-  } else {
-    // (B.2) no split by t_star1 in this bin
-    real midpoint2m = (t0m + t1m) / 2;
-    int  flag1_2m   = (midpoint2m >= t_star1) ? 1 : 0;
-    int  flag2_2m   = (midpoint2m >= t_star2) ? 1 : 0;
-    
-    P_total *= transition_matrix(
-      interval_length,
-      exp(log12 + flag1_2m*beta_int1 + flag2_2m*beta_int2 + beta_season_1_2 * s12m),
-      exp(log21 + flag1_2m*beta_int1 + flag2_2m*beta_int2 +beta_season_2_1* s21m)
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// (C) LAST SUBINTERVAL: entirely after t_star1, may split around t_star2
-// ─────────────────────────────────────────────────────────────────────
-if (last_subinterval[n] > 0) {
-  int    il   = idx_last[n];
-  real   s12l = Y_hat_1_2_out[il];
-  real   s21l = Y_hat_2_1_out[il];
-  
-  real t1l = date_use[n];
-  real t0l = t1l - last_subinterval[n] + 1;
-  
-  // (C.1) if t_star2 lies inside this last piece
-  if (t0l < t_star2 && t_star2 < t1l) {
-    real d3a = t_star2 - t0l;
-    real d3b = t1l     - t_star2 + 1;
-    
-    // Pre‐second: first intervention is already active (t0l > t_star1)
-    P_total *= transition_matrix(
-      d3a,
-      exp(log12 + 1*beta_int1 + 0*beta_int2 + beta_season_1_2 * s12l),
-      exp(log21 + 1*beta_int1 + 0*beta_int2 + beta_season_2_1* s21l)
-    );
-    
-    // Post‐second: both interventions active
-    P_total *= transition_matrix(
-      d3b,
-      exp(log12 + 1*beta_int1 + 1*beta_int2 + beta_season_1_2 * s12l),
-      exp(log21 + 1*beta_int1 + 1*beta_int2 + beta_season_2_1* s21l)
-    );
-    
-  } else {
-    // (C.2) no split by t_star2; entire last piece has first active,
-    // second may or may not be active depending on midpoint
-    real midpoint_l = (t0l + t1l) / 2;
-    int  flag1_l    = 1;  // always post‐first here
-    int  flag2_l    = (midpoint_l >= t_star2) ? 1 : 0;
-    
-    P_total *= transition_matrix(
-      last_subinterval[n],
-      exp(log12 + flag1_l*beta_int1 + flag2_l*beta_int2 + beta_season_1_2 * s12l),
-      exp(log21 + flag1_l*beta_int1 + flag2_l*beta_int2 + beta_season_2_1* s21l)
-    );
-  }
-}
-
-// Draw the next state for observation n
-y_rep[n] = categorical_rng(
-  to_vector(P_total[ observed_state[n-1] ]) 
-  / sum(P_total[ observed_state[n-1] ])
-);
-
-// Record the log‐hazards at the very end of this transition (using idx_last):
-  log_lambda_1_2_out[n] = log12 + Y_hat_1_2_out[idx_last[n]];
-log_lambda_2_1_out[n] = log21 + Y_hat_2_1_out[idx_last[n]];
-  }
-}
-
-
-
 "
 
 # 1. Compile
@@ -1102,12 +1054,23 @@ stan_model <- stan_model(model_code = stan_model_full)
 stan_fit <- sampling(
   object      = stan_model,
   data        = stan_data,
-  iter        = 1000,
+  iter        = 500,
   warmup      = 250,
-  chains      = 4,
-  cores       = 4,
+  chains      = 1,
+  #cores       = 4,
   control     = list(adapt_delta = 0.9995, max_treedepth = 20)
 )
+
+
+
+
+
+
+
+
+
+
+
 
 # 3. Quick summary
 print(stan_fit)
@@ -1121,227 +1084,56 @@ shinystan_obj <- as.shinystan(stan_fit)
 launch_shinystan(shinystan_obj)
 
 
-# 4. Extract parameter names
-params <- names(rstan::extract(stan_fit, permuted = TRUE))
-print(params)
+#####
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
 
-
-
-###############
-# Step 1: Extract the posterior matrix
+# Extract posterior samples
 posterior_samples <- rstan::extract(stan_fit)
+
+# Convert both seasonal effects to data frames
+Y_hat_1_2_df <- as.data.frame(posterior_samples$Y_hat_1_2_out)
 Y_hat_2_1_df <- as.data.frame(posterior_samples$Y_hat_2_1_out)
 
-# Step 2: Summarize posterior draws for each time point
+# Summarize posterior draws for acquisition (1→2)
+Y_hat_1_2_summary <- data.frame(
+  mean = apply(Y_hat_1_2_df, 2, mean),
+  lwr = apply(Y_hat_1_2_df, 2, function(x) quantile(x, 0.025)),
+  upr = apply(Y_hat_1_2_df, 2, function(x) quantile(x, 0.975)),
+  time = stan_data$X
+)
+
+# Summarize posterior draws for decolonization (2→1)
 Y_hat_2_1_summary <- data.frame(
   mean = apply(Y_hat_2_1_df, 2, mean),
   lwr = apply(Y_hat_2_1_df, 2, function(x) quantile(x, 0.025)),
-  upr = apply(Y_hat_2_1_df, 2, function(x) quantile(x, 0.975))
+  upr = apply(Y_hat_2_1_df, 2, function(x) quantile(x, 0.975)),
+  time = stan_data$X
 )
 
-# Step 3: Attach time variable (scaled years)
-Y_hat_2_1_summary$time <- stan_data$X
+# Plot: Seasonal effect on Acquisition (1→2)
+p1 <- ggplot(Y_hat_1_2_summary, aes(x = time, y = mean)) +
+  geom_line(color = "red") +
+  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2, fill = "red") +
+  labs(
+    title = "Seasonal Effect on Acquisition Rate (1→2)",
+    x = "Time (scaled years)",
+    y = "Log Effect"
+  ) +
+  theme_minimal()
 
-# Step 4: Plot using ggplot2
-library(ggplot2)
-
+# Plot: Seasonal effect on Recovery (2→1)
 p2 <- ggplot(Y_hat_2_1_summary, aes(x = time, y = mean)) +
   geom_line(color = "blue") +
   geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2, fill = "blue") +
   labs(
-    title = "Seasonal Effect on Recovery Rate (Y_hat_2_1)",
+    title = "Seasonal Effect on Recovery Rate (2→1)",
     x = "Time (scaled years)",
-    y = "Effect (log-scale)"
+    y = "Log Effect"
   ) +
   theme_minimal()
 
+# Display plots
+print(p1)
 print(p2)
-
-#####
-# Without transition or exponential transformation
-plot(stan_data$X, colMeans(posterior_samples$Y_hat_2_1_out), type = "l")
-
-plot(stan_data$X, colMeans(posterior_samples$Y_hat_1_2_out), type = "l")
-
-
-
-###############Sigmid 
-###check dimentions 
-dim(sigmoid_effect_df)
-length(stan_data$date_use)
-############### Sigmoid 
-# (Remove the stray Stan syntax “vector[N] sigmoid_out1 = sigmoid_effect;”)
-
-# Extract all posterior samples
-posterior_samples <- rstan::extract(stan_fit)
-
-# Look what parameters are available (optional)
-names(posterior_samples)
-
-# → Delete this line completely:
-#    vector[N] sigmoid_out1 = sigmoid_effect;
-
-# Instead, just pull “sigmoid_out1” directly from the posterior list:
-sigmoid_effect_df <- as.data.frame(posterior_samples$sigmoid_out1)
-
-# Now it makes sense to check dimensions:
-dim(sigmoid_effect_df)
-length(stan_data$date_use)
-
-# Compute mean and credible intervals per time point
-sigmoid_effect_summary <- data.frame(
-  mean = apply(sigmoid_effect_df, 2, mean),
-  lwr  = apply(sigmoid_effect_df, 2, function(x) quantile(x, 0.025)),
-  upr  = apply(sigmoid_effect_df, 2, function(x) quantile(x, 0.975))
-)
-
-# Also add time or date if you want
-sigmoid_effect_summary$date_use <- as.Date(as.numeric(stan_data$date_use), origin = "1970-01-01")
-
-library(ggplot2)
-ggplot(sigmoid_effect_summary, aes(x = date_use, y = mean)) +
-  geom_line(color = "darkblue") +
-  geom_ribbon(aes(ymin = lwr, ymax = upr), alpha = 0.2, fill = "lightblue") +
-  labs(
-    title = "Estimated Sigmoid Effect Over Time",
-    x     = "Date",
-    y     = "Sigmoid Effect"
-  ) +
-  theme_minimal()
-
-#######
-# Extract parameter names from the Stan fit
-params <- rstan::extract(stan_fit, permuted = TRUE)
-param_names <- names(params)
-
-# Show unique top-level parameters (remove indexing like [1], [2], etc.)
-unique_param_names <- unique(gsub("\\[.*\\]", "", param_names))
-
-# Print the unique parameter names
-print(unique_param_names)
-######################To extract /pull out both the seasonal‐spline values and your posterior for the intervention effect b _int
-# ————————————————————————————————
-# 1. EXTRACT ALL POSTERIOR DRAWS
-# ————————————————————————————————
-library(rstan)
-library(ggplot2)
-library(dplyr)
-library(lubridate)
-
-# (a) Pull out *all* posterior samples in a single `post` list
-post <- extract(stan_fit, permuted = TRUE)
-
-# (b) Seasonal‐spline outputs (log‐scale adjustments)
-#     – Y_hat_1_2_out : (iterations × num_data)
-#     – Y_hat_2_1_out : (iterations × num_data)
-Y12_draws <- post$Y_hat_1_2_out
-Y21_draws <- post$Y_hat_2_1_out
-
-# (c) Two separate intervention effects
-beta1_draws <- post$beta_int1    # first‐intervention effect [iterations]
-beta2_draws <- post$beta_int2    # second‐intervention effect [iterations]
-
-
-# ————————————————————————————————
-# 2. SUMMARIZE SEASONAL SPLINES
-# ————————————————————————————————
-# For each time‐point (1…num_data), compute mean and 95% CI on the log‐scale
-df_season <- data.frame(
-  time_scaled = stan_data$X,
-  # infection (1→2) seasonal adjustment
-  mean12 = apply(Y12_draws, 2, mean),
-  lo12   = apply(Y12_draws, 2, quantile, 0.025),
-  hi12   = apply(Y12_draws, 2, quantile, 0.975),
-  # recovery (2→1) seasonal adjustment
-  mean21 = apply(Y21_draws, 2, mean),
-  lo21   = apply(Y21_draws, 2, quantile, 0.025),
-  hi21   = apply(Y21_draws, 2, quantile, 0.975)
-)
-
-# Convert “time_scaled” (centered‐and‐scaled‐years) back to actual dates
-# Recall: X_midpoints = (interval_midpoint_numeric - interval_midpoint_numeric[1])/365 - median(...)
-# So to recover approximate date, we can add back:
-date0    <- as.Date(stan_data$global_interval_start, origin="1970-01-01")
-median_X <- median(stan_data$X) * 365
-df_season <- df_season %>%
-  mutate(
-    # “un‐center” then convert to days‐since‐1970:
-    date_mid = date0 + (time_scaled * 365 + median_X),
-    month    = floor_date(date_mid, "month")
-  )
-
-# ————————————————————————————————
-# 3. SUMMARIZE INTERVENTION EFFECTS
-# ————————————————————————————————
-# Compute mean + 95% CI for each of beta_int1 and beta_int2
-df_int <- tibble(
-  parameter = c("beta_int1", "beta_int2"),
-  mean      = c(mean(beta1_draws), mean(beta2_draws)),
-  lo025     = c(quantile(beta1_draws, 0.025), quantile(beta2_draws, 0.025)),
-  hi975     = c(quantile(beta1_draws, 0.975), quantile(beta2_draws, 0.975))
-)
-
-
-# ————————————————————————————————
-# 4. PLOT SEASONAL EFFECTS
-# ————————————————————————————————
-p_infect <- ggplot(df_season, aes(x = month, y = mean12)) +
-  geom_line(color = "blue") +
-  geom_ribbon(aes(ymin = lo12, ymax = hi12), alpha = 0.2, fill = "lightblue") +
-  labs(
-    title = "Seasonal Effect on Infection Rate (1 → 2)",
-    x = "Month", 
-    y = "Log‐rate Adjustment"
-  ) +
-  theme_minimal()
-
-p_recover <- ggplot(df_season, aes(x = month, y = mean21)) +
-  geom_line(color = "darkgreen") +
-  geom_ribbon(aes(ymin = lo21, ymax = hi21), alpha = 0.2, fill = "lightgreen") +
-  labs(
-    title = "Seasonal Effect on Recovery Rate (2 → 1)",
-    x = "Month", 
-    y = "Log‐rate Adjustment"
-  ) +
-  theme_minimal()
-
-print(p_infect)
-print(p_recover)
-
-
-# ————————————————————————————————
-# 5. PLOT INTERVENTION EFFECTS (BOTH TOGETHER)
-# ————————————————————————————————
-ggplot(df_int, aes(x = parameter, y = mean, ymin = lo025, ymax = hi975)) +
-  geom_point(size = 3) +
-  geom_errorbar(width = 0.2) +
-  labs(
-    title = "Posterior Estimates: Intervention Effects",
-    x = "Parameter",
-    y = "Posterior Mean ± 95% CI"
-  ) +
-  theme_minimal()
-
-
-# ————————————————————————————————
-# 6. OPTIONAL: PLOT DIRECTLY ON X‐AXIS = X (for quick checks)
-# ————————————————————————————————
-#— Recovery spline (log-scale)—
-plot(
-  stan_data$X, 
-  colMeans(Y21_draws), 
-  type = "l", 
-  main = "Mean Y_hat_2_1 (log‐scale) vs. X",
-  xlab = "Time (scaled years)", 
-  ylab = "Mean log‐adjustment"
-)
-
-#— Infection spline (log-scale)—
-plot(
-  stan_data$X, 
-  colMeans(Y12_draws), 
-  type = "l", 
-  main = "Mean Y_hat_1_2 (log‐scale) vs. X",
-  xlab = "Time (scaled years)", 
-  ylab = "Mean log‐adjustment"
-)

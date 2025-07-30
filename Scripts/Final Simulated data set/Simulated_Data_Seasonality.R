@@ -139,26 +139,31 @@ simulated_intervention_date2_orig <- rep(as.Date(NA), N_individuals)
 treated_indices <- which(village_intervention_map[village_ids_per_individual] == 1)
 
 
-simulated_intervention_date_orig[treated_indices] <- global_intervention_date1 + noise1[treated_indices]
+# Expand intervention indicator to match rounds
+Intervention_expanded <- Intervention
+# Assign intervention dates only for treated (intervention) villages
+simulated_intervention_date_orig[treated_indices]  <- global_intervention_date1 + noise1[treated_indices]
 simulated_intervention_date2_orig[treated_indices] <- global_intervention_date2 + noise2[treated_indices]
-simulated_intervention_date <- rep(simulated_intervention_date_orig, each = n_rounds)
+
+# Expand to rounds
+simulated_intervention_date  <- rep(simulated_intervention_date_orig,  each = n_rounds)
 simulated_intervention_date2 <- rep(simulated_intervention_date2_orig, each = n_rounds)
-simulated_intervention_date_num <- as.numeric(simulated_intervention_date - global_interval_start)
+
+# Convert to numeric relative to global start
+simulated_intervention_date_num  <- as.numeric(simulated_intervention_date  - global_interval_start)
 simulated_intervention_date2_num <- as.numeric(simulated_intervention_date2 - global_interval_start)
 
-# Replace NAs with a value before global interval (so never triggered)
-simulated_intervention_date_num[is.na(simulated_intervention_date_num)] <- -999
-simulated_intervention_date2_num[is.na(simulated_intervention_date2_num)] <- -999
+# For control villages only: replace with -999
+simulated_intervention_date_num[Intervention_expanded == 0]  <- -999
+simulated_intervention_date2_num[Intervention_expanded == 0] <- -999
 
-simulated_intervention_date[is.na(simulated_intervention_date)] <- -999
-simulated_intervention_date2[is.na(simulated_intervention_date2)] <- -999
+simulated_intervention_date[Intervention_expanded == 0]  <- -999
+simulated_intervention_date2[Intervention_expanded == 0] <- -999
 
+# Original intervention flags (corrected to account for -999 and control villages)
+Intervention1_active <- ifelse(Intervention_expanded == 1 & simulated_intervention_date != -999 & date_use >= simulated_intervention_date, 1, 0)
+Intervention2_active <- ifelse(Intervention_expanded == 1 & simulated_intervention_date2 != -999 & date_use >= simulated_intervention_date2, 1, 0)
 
-
-
-# Original intervention flags (to be replaced later in simulated_dataset)
-Intervention1_active <- ifelse(Intervention == 1 & !is.na(simulated_intervention_date) & date_use >= simulated_intervention_date, 1, 0)
-Intervention2_active <- ifelse(Intervention == 1 & !is.na(simulated_intervention_date2) & date_use >= simulated_intervention_date2, 1, 0)
 
 # Interval calculations
 total_days <- global_interval_end_num - global_interval_start_num + 1
@@ -726,17 +731,33 @@ ggplot(obs_dates, aes(x = Date, fill = factor(Round))) +
   labs(title = "Distribution of Observation Dates by Round", x = "Date", y = "Count")
 
 ##########Intervention Activation Over Time
+library(tidyr)
+library(ggplot2)
+
+# Prepare intervention data in long format
 intervention_status <- data.frame(
   Date = as.Date(date_use, origin = "1970-01-01"),
   Interv1_active = Intervention1_active,
   Interv2_active = Intervention2_active
-)
+) %>%
+  pivot_longer(cols = c(Interv1_active, Interv2_active),
+               names_to = "Intervention",
+               values_to = "Active")
 
-ggplot(intervention_status, aes(x = Date)) +
-  geom_line(stat = "count", aes(color = "Intervention 1 Active")) +
-  geom_line(stat = "count", aes(y = ..count.., color = "Intervention 2 Active")) +
-  labs(title = "Activation of Interventions Over Time", x = "Date", y = "Active Individuals") +
-  scale_color_manual(values = c("red", "blue"))
+# Aggregate by date (sum of active individuals per day)
+intervention_summary <- intervention_status %>%
+  group_by(Date, Intervention) %>%
+  summarise(Active_Count = sum(Active), .groups = "drop")
+
+# Plot correctly
+ggplot(intervention_summary, aes(x = Date, y = Active_Count, color = Intervention)) +
+  geom_line() +
+  labs(
+    title = "Activation of Interventions Over Time",
+    x = "Date",
+    y = "Active Individuals"
+  ) +
+  scale_color_manual(values = c("Interv1_active" = "red", "Interv2_active" = "blue"))
 ###############
 age_df <- data.frame(Age = age)
 ggplot(age_df, aes(x = Age)) +
@@ -755,9 +776,10 @@ ggplot(age_df, aes(x = Age)) +
 #   geom_histogram(position = "dodge", bins = 30) +
 #   labs(title = "Distribution of Subinterval Durations", x = "Duration (days)", y = "Count")
 #############
+# decolnisation should be incresing here 
 q_df <- data.frame(
   Type = c("q_1_2", "q_2_1"),
-  Value = exp(c(true_params$q_1_2_base, true_params$q_2_1_base))
+  Value = c(true_params$q_1_2_base, true_params$q_2_1_base)
 )
 
 ggplot(q_df, aes(x = Type, y = Value, fill = Type)) +
@@ -769,3 +791,9 @@ plot(
   type = 'l', lwd = 2, 
   xlab = "Subinterval", ylab = "Seasonal effect on acquisition"
 )
+####make sure to invidigate things for control group.
+#####number of individuals going up month 7-10.do bar graph number positive /number of samples to check the seasonal pattern picked up . d
+#### do seasonality effect control vs intervention.
+###plot the patterns of seasonality , observations per round and where the intervention happen , do then plot for the control geoup of lambdas positive  /samples number at that day over time to compare between intervention and control.
+##### make sure the control group are included in the fitting procedure they should have all the time base line acquestion. if loop intervention =0 then define log lambda = baseline 
+#### map the midpoint to the months for seasonality.

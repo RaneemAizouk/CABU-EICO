@@ -388,10 +388,9 @@ generated quantities {
   vector[N] log_lambda_2_1_out;
   int observed_state[N];
   int y_rep[N];
-  vector[N] flag1_out;
-  vector[N] flag2_out;
+
   vector[num_data] Y_hat_1_2_out;
-  int second_intervention_used[N];
+
   real log_lambda_1_2;
   real log_lambda_2_1;
  
@@ -452,8 +451,8 @@ if (first_subinterval_sim[n] > 0) {
     P_total *= transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
     // --- Post-intervention 1: add first intervention effect
-    log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
+    log_lambda_1_2 = log12_base + s12 + intervention[n] * beta_int1_1;
+    log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
     P_total *= transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
   } else {
@@ -484,8 +483,8 @@ if (first_subinterval_sim[n] > 0) {
           
           P_total *= transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
   // Post-intervention part (only first intervention effect)
-    log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
+    log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1;
+    log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
      P_total *= transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
      
        } else {
@@ -494,12 +493,12 @@ if (first_subinterval_sim[n] > 0) {
 
     if (midpoint >= t_star2) {
       // Both interventions cumulative
-      log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+      log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
+      log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1 +intervention[n] *  beta_int2_2;
     } else if (midpoint >= t_star1) {
       // Only first intervention
-      log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-      log_lambda_2_1 = log21_base + beta_int2_1;
+      log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1;
+      log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
     } else {
       // Baseline
       log_lambda_1_2 = log12_base + s12m;
@@ -528,13 +527,13 @@ if (last_subinterval_sim[n] > 0) {
     real d3b = t1l - t_star2 + 1;   // after second intervention
 
     // --- Pre-second intervention: only first intervention effect
-    log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
+    log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1;
+    log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
     P_total *= transition_matrix(d3a, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
     // --- Post-second intervention: both interventions
-    log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-    log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+    log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
+    log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1 +intervention[n] *  beta_int2_2;
     P_total *= transition_matrix(d3b, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
   } else {
@@ -543,12 +542,12 @@ if (last_subinterval_sim[n] > 0) {
 
     if (midpoint >= t_star2) {
       // Both interventions cumulative
-      log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+      log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
+      log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1 +intervention[n] *  beta_int2_2;
     } else if (midpoint >= t_star1) {
       // Only first intervention
-      log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-      log_lambda_2_1 = log21_base + beta_int2_1;
+      log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1;
+      log_lambda_2_1 = log21_base + intervention[n] *  beta_int2_1;
     } else {
       // Baseline (no interventions)
       log_lambda_1_2 = log12_base + s12l;
@@ -565,8 +564,7 @@ if (last_subinterval_sim[n] > 0) {
       //real midpoint_final = (date_use[n - 1] + date_use[n]) / 2;
       //int flag1_final = (intervention[n] == 1 && midpoint_final >= t_star1) ? 1 : 0;
       //int flag2_final = (intervention[n] == 1 && midpoint_final >= t_star2) ? 1 : 0;
-      //flag1_out[n] = flag1_final;
-      //flag2_out[n] = flag2_final;
+    
     
       vector[2] probs = to_vector(P_total[observed_state[n - 1]]);
       observed_state[n] = categorical_rng(probs / sum(probs));
@@ -580,8 +578,8 @@ if (last_subinterval_sim[n] > 0) {
           \", log_lambda_1_2: \", log_lambda_1_2);
     
 
-    log_lambda_1_2_out[n] = log_lambda_1_2; // log12_base + s12_final + flag1_final * beta_int1_1 + flag2_final * beta_int1_2;
-    log_lambda_2_1_out[n] = log_lambda_2_1; // log21_base + flag1_final * beta_int2_1 + flag2_final * beta_int2_2;
+    log_lambda_1_2_out[n] = log_lambda_1_2; // 
+    log_lambda_2_1_out[n] = log_lambda_2_1; // 
   }
 }
 
@@ -633,8 +631,6 @@ simulated_dataset <- data.frame(
   stringsAsFactors = FALSE
 )
 
-simulated_dataset$flag1_out <- as.vector(sim_data$flag1_out)
-simulated_dataset$flag2_out <- as.vector(sim_data$flag2_out)
 
 # Ensure date columns are in Date format
 simulated_dataset$Date <- as.Date(simulated_dataset$Date)

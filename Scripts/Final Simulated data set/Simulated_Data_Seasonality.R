@@ -57,13 +57,18 @@ d2 <- 150  # Increased to cover Feb 2023 to Aug 2023
 d3 <- 180
 baseline_date <- as.Date("2022-10-01")
 start_dates <- baseline_date + sample(0:30, N_individuals, replace = TRUE)
-
+#start_dates <- baseline_date + sample(0:60, N_individuals, replace = TRUE)  # September 1, 2022, to October 31, 2022
 # Observation dates for each round
 date_use <- rep(as.Date(NA), N)
 for (i in 1:N_individuals) {
   base <- start_dates[i]
   idx <- ((i - 1) * n_rounds + 1):(i * n_rounds)
-  noise <- sample(-20:20, 3, replace = TRUE)
+ # noise <- sample(-20:20, 3, replace = TRUE)
+ # noise <- c(sample(-d1:d1, 1), sample(-d2:d2, 1), sample(-d3:d3, 1))
+  # Sample noise over ±50% of each interval
+  noise <- c(sample(floor(-d1/2):floor(d1/2), 1), 
+             sample(floor(-d2/2):floor(d2/2), 1), 
+             sample(floor(-d3/2):floor(d3/2), 1))
   dates <- base + c(0, 
                     d1 + noise[1], 
                     d1 + d2 + noise[2], 
@@ -215,7 +220,7 @@ for (n in 1:N) {
     idx_last_sim[n] <- idx_first_sim[n]
   } else {
     idx_first_sim[n] <- floor((date_use_num[n - 1] - global_interval_start_num) / interval_length) + 1
-    idx_last_sim[n] <- floor((date_use_num[n] - global_interval_start_num) / interval_length) + 1
+    idx_last_sim[n] <- ceiling((date_use_num[n] - global_interval_start_num) / interval_length) + 1
   }
   idx_first_sim[n] <- max(1L, min(num_intervals, idx_first_sim[n]))
   idx_last_sim[n] <- max(1L, min(num_intervals, idx_last_sim[n]))
@@ -794,3 +799,76 @@ plot(
 ###plot the patterns of seasonality , observations per round and where the intervention happen , do then plot for the control geoup of lambdas positive  /samples number at that day over time to compare between intervention and control.
 ##### make sure the control group are included in the fitting procedure they should have all the time base line acquestion. if loop intervention =0 then define log lambda = baseline 
 #### map the midpoint to the months for seasonality.
+
+#################### Plot for Plot 1: Raw count of positives.
+# Plot 2: Positivity rate (positives / total).
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# 1. Create positivity indicator (based on Observed_State)
+df <- simulated_dataset %>%
+  mutate(
+    positive = ifelse(Observed_State_Sim == 2, 1, 0),
+    year_month = format(Date, "%Y-%m"),
+    month = as.numeric(format(Date, "%m")),
+    Intervention_Group = Intervention
+  )
+
+# 2. Summarize data per month & group
+df_monthly <- df %>%
+  group_by(year_month, month, Intervention_Group) %>%
+  summarise(
+    positives = sum(positive, na.rm = TRUE),
+    total_samples = n(),
+    positivity_rate = positives / total_samples,
+    .groups = "drop"
+  )
+
+# 3. Ensure chronological order
+df_monthly$year_month <- factor(df_monthly$year_month,
+                                levels = unique(df_monthly$year_month[order(df_monthly$year_month)]))
+
+# ---------------------------
+# Plot 1: Raw positives
+# ---------------------------
+plot_positives <- ggplot(df_monthly, aes(x = year_month, y = positives, fill = factor(Intervention_Group))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = positives),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "darkorange"),
+                    labels = c("Control", "Intervention"),
+                    name = "Group") +
+  labs(
+    title = "Monthly Positive Counts: Control vs Intervention",
+    x = "Month",
+    y = "Number of Positives"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# ---------------------------
+# Plot 2: Positivity rate
+# ---------------------------
+plot_positivity_rate <- ggplot(df_monthly, aes(x = year_month, y = positivity_rate, fill = factor(Intervention_Group))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = scales::percent(positivity_rate, accuracy = 0.1)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5, size = 3) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "darkorange"),
+                    labels = c("Control", "Intervention"),
+                    name = "Group") +
+  labs(
+    title = "Monthly Positivity Rate: Control vs Intervention",
+    x = "Month",
+    y = "Positivity Rate"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Print the two plots
+plot_positives
+plot_positivity_rate
+#########

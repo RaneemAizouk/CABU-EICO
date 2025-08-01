@@ -57,13 +57,18 @@ d2 <- 150  # Increased to cover Feb 2023 to Aug 2023
 d3 <- 180
 baseline_date <- as.Date("2022-10-01")
 start_dates <- baseline_date + sample(0:30, N_individuals, replace = TRUE)
-
+#start_dates <- baseline_date + sample(0:60, N_individuals, replace = TRUE)  # September 1, 2022, to October 31, 2022
 # Observation dates for each round
 date_use <- rep(as.Date(NA), N)
 for (i in 1:N_individuals) {
   base <- start_dates[i]
   idx <- ((i - 1) * n_rounds + 1):(i * n_rounds)
-  noise <- sample(-20:20, 3, replace = TRUE)
+ # noise <- sample(-20:20, 3, replace = TRUE)
+ # noise <- c(sample(-d1:d1, 1), sample(-d2:d2, 1), sample(-d3:d3, 1))
+  # Sample noise over ±50% of each interval
+  noise <- c(sample(floor(-d1/2):floor(d1/2), 1), 
+             sample(floor(-d2/2):floor(d2/2), 1), 
+             sample(floor(-d3/2):floor(d3/2), 1))
   dates <- base + c(0, 
                     d1 + noise[1], 
                     d1 + d2 + noise[2], 
@@ -215,7 +220,7 @@ for (n in 1:N) {
     idx_last_sim[n] <- idx_first_sim[n]
   } else {
     idx_first_sim[n] <- floor((date_use_num[n - 1] - global_interval_start_num) / interval_length) + 1
-    idx_last_sim[n] <- floor((date_use_num[n] - global_interval_start_num) / interval_length) + 1
+    idx_last_sim[n] <- ceiling((date_use_num[n] - global_interval_start_num) / interval_length) + 1
   }
   idx_first_sim[n] <- max(1L, min(num_intervals, idx_first_sim[n]))
   idx_last_sim[n] <- max(1L, min(num_intervals, idx_last_sim[n]))
@@ -386,10 +391,9 @@ generated quantities {
   vector[N] log_lambda_2_1_out;
   int observed_state[N];
   int y_rep[N];
-  vector[N] flag1_out;
-  vector[N] flag2_out;
+
   vector[num_data] Y_hat_1_2_out;
-  int second_intervention_used[N];
+
   real log_lambda_1_2;
   real log_lambda_2_1;
  
@@ -440,7 +444,7 @@ if (first_subinterval_sim[n] > 0) {
   // If intervention 1 does NOT belong to this subinterval, then
   // intervention 2 also cannot happen (due to 3 months separation),
   // so we only use baseline + seasonality for the whole subinterval.
-  if (t0 < t_star1 && t_star1 < t1 && intervention[n] == 1) {
+  if (t0 < t_star1 && t_star1 < t1 ) {
     real d1a = t_star1 - t0;         // duration before first intervention
     real d1b = t1 - t_star1 + 1;     // duration after first intervention
 
@@ -450,8 +454,8 @@ if (first_subinterval_sim[n] > 0) {
     P_total *= transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
     // --- Post-intervention 1: add first intervention effect
-    log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
+    log_lambda_1_2 = log12_base + s12 + intervention[n] * beta_int1_1;
+    log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1;
     P_total *= transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
   } else {
@@ -472,7 +476,7 @@ if (first_subinterval_sim[n] > 0) {
       //If the first intervention lies in the subinterval :
      //Split the interval into two parts: pre-intervention and post-intervention.
     //In post-intervention part, apply only the first intervention effect (no need to check the second intervention because 3 months separation ensures it can't happen in the same subinterval).
-        if (t0m < t_star1 && t_star1 < t1m) {
+        if (t0m < t_star1 && t_star1 < t1m &&intervention[n] == 1) {
         //// CASE 1: First intervention lies inside the subinterval -> split
           real d2a = t_star1 - t0m;
           real d2b = t1m - t_star1 + 1;
@@ -482,8 +486,8 @@ if (first_subinterval_sim[n] > 0) {
           
           P_total *= transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
   // Post-intervention part (only first intervention effect)
-    log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
+    log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1;
+    log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1;
      P_total *= transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
      
        } else {
@@ -492,12 +496,12 @@ if (first_subinterval_sim[n] > 0) {
 
     if (midpoint >= t_star2) {
       // Both interventions cumulative
-      log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+      log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
+      log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1 + intervention[n] * beta_int2_2;
     } else if (midpoint >= t_star1) {
       // Only first intervention
-      log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-      log_lambda_2_1 = log21_base + beta_int2_1;
+      log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1;
+      log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1;
     } else {
       // Baseline
       log_lambda_1_2 = log12_base + s12m;
@@ -526,13 +530,13 @@ if (last_subinterval_sim[n] > 0) {
     real d3b = t1l - t_star2 + 1;   // after second intervention
 
     // --- Pre-second intervention: only first intervention effect
-    log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
+    log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1;
+    log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1;
     P_total *= transition_matrix(d3a, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
     // --- Post-second intervention: both interventions
-    log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-    log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+    log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
+    log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1 + intervention[n] * beta_int2_2;
     P_total *= transition_matrix(d3b, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
   } else {
@@ -541,12 +545,12 @@ if (last_subinterval_sim[n] > 0) {
 
     if (midpoint >= t_star2) {
       // Both interventions cumulative
-      log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+      log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
+      log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1 + intervention[n] * beta_int2_2;
     } else if (midpoint >= t_star1) {
       // Only first intervention
-      log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-      log_lambda_2_1 = log21_base + beta_int2_1;
+      log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1;
+      log_lambda_2_1 = log21_base + intervention[n] * beta_int2_1;
     } else {
       // Baseline (no interventions)
       log_lambda_1_2 = log12_base + s12l;
@@ -563,8 +567,7 @@ if (last_subinterval_sim[n] > 0) {
       //real midpoint_final = (date_use[n - 1] + date_use[n]) / 2;
       //int flag1_final = (intervention[n] == 1 && midpoint_final >= t_star1) ? 1 : 0;
       //int flag2_final = (intervention[n] == 1 && midpoint_final >= t_star2) ? 1 : 0;
-      //flag1_out[n] = flag1_final;
-      //flag2_out[n] = flag2_final;
+   
     
       vector[2] probs = to_vector(P_total[observed_state[n - 1]]);
       observed_state[n] = categorical_rng(probs / sum(probs));
@@ -578,8 +581,8 @@ if (last_subinterval_sim[n] > 0) {
           \", log_lambda_1_2: \", log_lambda_1_2);
     
 
-    log_lambda_1_2_out[n] = log_lambda_1_2; // log12_base + s12_final + flag1_final * beta_int1_1 + flag2_final * beta_int1_2;
-    log_lambda_2_1_out[n] = log_lambda_2_1; // log21_base + flag1_final * beta_int2_1 + flag2_final * beta_int2_2;
+    log_lambda_1_2_out[n] = log_lambda_1_2; 
+    log_lambda_2_1_out[n] = log_lambda_2_1; 
   }
 }
 
@@ -631,8 +634,7 @@ simulated_dataset <- data.frame(
   stringsAsFactors = FALSE
 )
 
-simulated_dataset$flag1_out <- as.vector(sim_data$flag1_out)
-simulated_dataset$flag2_out <- as.vector(sim_data$flag2_out)
+
 
 # Ensure date columns are in Date format
 simulated_dataset$Date <- as.Date(simulated_dataset$Date)
@@ -797,3 +799,76 @@ plot(
 ###plot the patterns of seasonality , observations per round and where the intervention happen , do then plot for the control geoup of lambdas positive  /samples number at that day over time to compare between intervention and control.
 ##### make sure the control group are included in the fitting procedure they should have all the time base line acquestion. if loop intervention =0 then define log lambda = baseline 
 #### map the midpoint to the months for seasonality.
+
+#################### Plot for Plot 1: Raw count of positives.
+# Plot 2: Positivity rate (positives / total).
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+# 1. Create positivity indicator (based on Observed_State)
+df <- simulated_dataset %>%
+  mutate(
+    positive = ifelse(Observed_State_Sim == 2, 1, 0),
+    year_month = format(Date, "%Y-%m"),
+    month = as.numeric(format(Date, "%m")),
+    Intervention_Group = Intervention
+  )
+
+# 2. Summarize data per month & group
+df_monthly <- df %>%
+  group_by(year_month, month, Intervention_Group) %>%
+  summarise(
+    positives = sum(positive, na.rm = TRUE),
+    total_samples = n(),
+    positivity_rate = positives / total_samples,
+    .groups = "drop"
+  )
+
+# 3. Ensure chronological order
+df_monthly$year_month <- factor(df_monthly$year_month,
+                                levels = unique(df_monthly$year_month[order(df_monthly$year_month)]))
+
+# ---------------------------
+# Plot 1: Raw positives
+# ---------------------------
+plot_positives <- ggplot(df_monthly, aes(x = year_month, y = positives, fill = factor(Intervention_Group))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = positives),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5, size = 3) +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "darkorange"),
+                    labels = c("Control", "Intervention"),
+                    name = "Group") +
+  labs(
+    title = "Monthly Positive Counts: Control vs Intervention",
+    x = "Month",
+    y = "Number of Positives"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# ---------------------------
+# Plot 2: Positivity rate
+# ---------------------------
+plot_positivity_rate <- ggplot(df_monthly, aes(x = year_month, y = positivity_rate, fill = factor(Intervention_Group))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_text(aes(label = scales::percent(positivity_rate, accuracy = 0.1)),
+            position = position_dodge(width = 0.9),
+            vjust = -0.5, size = 3) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_fill_manual(values = c("0" = "steelblue", "1" = "darkorange"),
+                    labels = c("Control", "Intervention"),
+                    name = "Group") +
+  labs(
+    title = "Monthly Positivity Rate: Control vs Intervention",
+    x = "Month",
+    y = "Positivity Rate"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Print the two plots
+plot_positives
+plot_positivity_rate
+#########

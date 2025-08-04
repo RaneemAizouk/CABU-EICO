@@ -643,6 +643,360 @@ unique(stan_df$Intervention2_active[stan_df$intervention==1&stan_df$round%in%c(1
 
 
 # Stan Model
+# stan_code <- "
+# functions {
+#   matrix transition_matrix(real t, real lambda_1_2, real lambda_2_1) {
+#     real total_lambda = lambda_1_2 + lambda_2_1;                           // Total transition rate (acquisitions and decolonisations)
+#     real exp_term = total_lambda > 0 ? exp(-total_lambda * t) : 1.0;      // Exponential decay term
+#     matrix[2,2] P;
+#     if (total_lambda == 0) {
+#       P[1,1] = 1.0; P[1,2] = 0.0;                                          // No transition possible
+#       P[2,1] = 0.0; P[2,2] = 1.0;
+#     } else {
+#       P[1,1] = (lambda_2_1 / total_lambda) + (lambda_1_2 / total_lambda) * exp_term;  // Prob staying in state 1
+#       P[2,2] = (lambda_1_2 / total_lambda) + (lambda_2_1 / total_lambda) * exp_term;  // Prob staying in state 2
+#       P[1,2] = (lambda_1_2 / total_lambda) * (1 - exp_term);                           // Prob moving from 1 to 2
+#       P[2,1] = (lambda_2_1 / total_lambda) * (1 - exp_term);                           // Prob moving from 2 to 1
+#     }
+#     return P;
+#   }
+# }
+# data {
+#   int<lower=1> N;                           // Number of observations
+#   int<lower=1> H;                           // Number of households
+#   int<lower=1> N_persons;                  // Number of individuals
+#   int menage_id_member[N];                // Household ID for each individual
+#   int round[N];                            // Round number
+#   int HouseID[N];                          // Household ID
+#   int age[N];                              // Age of individual
+#   int sexe[N];                             // Sex of individual
+#   int<lower=1, upper=2> obs[N];             // For first observation
+#   real date_use[N];                        // Observation date
+#   real intervention_date[N];              // First/second intervention date
+#   real intervention_date2[N];             // Third intervention date
+#   real global_interval_start;             // Study start date
+#   real global_interval_end;               // Study end date
+#   real interval_length;                   // Length of one interval (28 days)
+#   int<lower=1> num_data;                  // Number of intervals (e.g., time grid size)
+#   real X[num_data];                        // Scaled time points (in years) for seasonal effect
+#   real q_1_2_base;                         // Baseline acquisition rate
+#   real q_2_1_base;                         // Baseline decolonisation rate
+#   real beta_1_2_age;                      // Age effect on acquisition
+#   real beta_2_1_age;                      // Age effect on decolonisation
+#   real beta_1_2_sexe;                     // Sex effect on acquisition
+#   real beta_2_1_sexe;                     // Sex effect on decolonisation
+#   real beta_int1_1;                       // Effect of interventions 1+2 on acquisition
+#   real beta_int1_2;                       // Effect of intervention 3 on acquisition
+#   real beta_int2_1;                       // Effect of interventions 1+2 on decolonisation
+#   real beta_int2_2;                       // Effect of intervention 3 on decolonisation
+#   real u[H];                               // Household-level random effects
+#   real a1;                                 // Amplitude of seasonal effect
+#   real phi;                                // Phase shift of seasonal effect
+#   int<lower=1> max_middle;                // Max number of middle intervals
+#   int<lower=1> idx_first_sim[N];         // Index of first time interval per obs
+#   int<lower=1> idx_last_sim[N];          // Index of last time interval per obs
+#   real<lower=0> first_subinterval_sim[N]; // Proportion of first interval contributing
+#   real<lower=0> last_subinterval_sim[N];  // Proportion of last interval contributing
+#   int<lower=0> num_middle_subintervals_sim[N]; // Number of full intervals per obs
+#   int<lower=1> idx_middle_sim[N, max_middle]; // Indices of middle intervals
+#   int<lower=1> global_interval_index_start[N]; // Global time interval for observation start
+#   int<lower=0, upper=1> intervention[N];        // Whether intervention was applied (binary, i.e. intervention or control group)
+# }
+# generated quantities {
+#   vector[N] log_lambda_1_2_out;          // Log acquisition rate per observation
+#   vector[N] log_lambda_2_1_out;          // Log decolonisation rate per observation
+#   int<lower=1, upper=2> observed_state[N]; // Simulated colonisation state (1 or 2)
+#   int y_rep[N];                          // Replicated outcome for posterior predictive checks
+#   vector[num_data] Y_hat_1_2_out;        // Seasonal intervention effect over time (i.e. what seasonal effect to expect at the time of the observation)
+#   int second_intervention_used[N];       // Whether second intervention was active
+#   real log_lambda_1_2;                   // Placeholder for a global acquisition rate
+#   real log_lambda_2_1;                   // Placeholder for a global decolonisation rate
+#   int acquisitions[N] = rep_array(0, N);
+#   int decolonisations[N] = rep_array(0, N);
+#   int at_risk_acquisition[N] = rep_array(0, N);
+#   int at_risk_decolonisation[N] = rep_array(0, N);
+# 
+# 
+#   // Generate seasonal covariate
+#   # Seasonal intervention effect modeled as a sine wave with:
+#   # - a1: amplitude of the seasonal effect (max effect size)
+#   # - X[i]: time (in years) since the start of the observation period, where 0 is the start of the study period and 1.4 the end of the study period (i.e. 1.4 years)
+#   # - phi: phase shift (in radians), determines when the seasonal peak occurs
+#   # The sine function completes one full cycle per year.
+#   # For example, if phi = 0, the effect peaks at the start of the study.
+# 
+#   for (i in 1:num_data) {
+#      Y_hat_1_2_out[i] = a1 * sin(2 * pi() * X[i] + phi);  
+#   }
+# 
+#   for (n in 1:N) {
+#     real log12_base = q_1_2_base + u[HouseID[n]] + beta_1_2_age * age[n] + beta_1_2_sexe * sexe[n];
+#     real log21_base = q_2_1_base + u[HouseID[n]] + beta_2_1_age * age[n] + beta_2_1_sexe * sexe[n];
+#     real t_star1 = intervention_date[n];
+#     real t_star2 = intervention_date2[n];
+#    
+# 
+#     // Handle first observation in household
+#     if (n == 1 || menage_id_member[n] != menage_id_member[n - 1]) {
+#       observed_state[n] = obs[n];
+#       y_rep[n] = observed_state[n];
+#      
+# 
+#       int i0 = idx_first_sim[n];
+#       real s12 = Y_hat_1_2_out[i0]; # This identifies the seasonal effect at the time of the observation (i0 is the time of the first observation)
+# 
+#       log_lambda_1_2 = log12_base;
+#       log_lambda_2_1 = log21_base;
+# 
+#       matrix[2, 2] P_total = diag_matrix(rep_vector(1.0, 2));
+#       continue;  // prevents illegal access to observed_state[n - 1]
+#     } else {
+# 
+#       // Cumulative transition matrix
+#       matrix[2, 2] P_total = diag_matrix(rep_vector(1.0, 2));
+#       
+#       int current_state = observed_state[n - 1];
+#       int next_state;
+#          
+#       // --- First subinterval
+# if (first_subinterval_sim[n] > 0) {
+#   int i1 = idx_first_sim[n];
+#   real s12 = Y_hat_1_2_out[i1];
+#   real t0 = date_use[n - 1];
+#   real t1 = t0 + first_subinterval_sim[n] - 1;
+# 
+#   // In the first subinterval:
+#   // If the first intervention date (t_star1) lies in this interval,
+#   // and intervention 1 is actually applied, we split into:
+#   //    1. Pre-intervention (baseline only)
+#   //    2. Post-intervention 1 (effect of the first intervention)
+#   // If intervention 1 does NOT belong to this subinterval, then
+#   // intervention 2 also cannot happen (due to 3 months separation),
+#   // so we only use baseline + seasonality for the whole subinterval.
+#   if (t0 < t_star1 && t_star1 < t1 && intervention[n] == 1) {
+#     real d1a = t_star1 - t0;         // duration before first intervention
+#     real d1b = t1 - t_star1 + 1;     // duration after first intervention
+# 
+#     // --- Pre-intervention 1: baseline (no interventions)
+#     log_lambda_1_2 = log12_base + s12;
+#     log_lambda_2_1 = log21_base;
+#     
+# {
+#       matrix[2,2] P = transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+#     
+#     // --- Post-intervention 1: add first intervention effect
+#     log_lambda_1_2 = log12_base + s12 + beta_int1_1;
+#     log_lambda_2_1 = log21_base + beta_int2_1;
+#     
+#   {
+#       matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+#     
+#   } else {
+#     // --- No first intervention effect in this subinterval:
+#     // apply only baseline + seasonality
+#     log_lambda_1_2 = log12_base + s12;
+#     log_lambda_2_1 = log21_base;
+#     
+#   {
+#       matrix[2,2] P = transition_matrix(first_subinterval_sim[n], exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+#   }
+# }
+# // --- Middle subintervals
+# for (m in 1:num_middle_subintervals_sim[n]) {
+#   int im = idx_middle_sim[n, m];
+#   real s12m = Y_hat_1_2_out[im];
+#   real t0m = global_interval_start + (global_interval_index_start[n] + m - 1) * interval_length;
+#   real t1m = t0m + interval_length - 1;
+# 
+#   if (t0m < t_star1 && t_star1 < t1m && intervention[n] == 1) {
+#     // CASE 1: First intervention lies inside the subinterval → split
+#     real d2a = t_star1 - t0m;
+#     real d2b = t1m - t_star1 + 1;
+# 
+#     // --- Pre-intervention: baseline + seasonality
+#     log_lambda_1_2 = log12_base + s12m;
+#     log_lambda_2_1 = log21_base;
+#     {
+#       matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+# 
+#     // --- Post-intervention 1
+#     log_lambda_1_2 = log12_base + s12m + beta_int1_1;
+#     log_lambda_2_1 = log21_base + beta_int2_1;
+#     {
+#       matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+# 
+#   } else {
+#     // CASE 2: First intervention does NOT lie inside → use midpoint logic
+#     real midpoint = (t0m + t1m) / 2;
+# 
+#     if (midpoint >= t_star2 && intervention[n] == 1) {
+#       log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+#       log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+#     } else if (midpoint >= t_star1 && intervention[n] == 1) {
+#       log_lambda_1_2 = log12_base + s12m + beta_int1_1;
+#       log_lambda_2_1 = log21_base + beta_int2_1;
+#     } else {
+#       log_lambda_1_2 = log12_base + s12m;
+#       log_lambda_2_1 = log21_base;
+#     }
+# 
+#     {
+#       matrix[2,2] P = transition_matrix(interval_length, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+#   }
+# }
+# // --- Last subinterval
+# if (last_subinterval_sim[n] > 0) {
+#   int il = idx_last_sim[n];
+#   real s12l = Y_hat_1_2_out[il];
+#   real t1l = date_use[n];
+#   real t0l = t1l - last_subinterval_sim[n] + 1;
+# 
+#   if (t0l < t_star2 && t_star2 < t1l && intervention[n] == 1) {
+#     // Split at second intervention (intervention group only)
+#     real d3a = t_star2 - t0l;       // Before second intervention
+#     real d3b = t1l - t_star2 + 1;   // After second intervention
+# 
+#     // Pre-second intervention: first intervention only
+#     log_lambda_1_2 = log12_base + s12l + beta_int1_1;
+#     log_lambda_2_1 = log21_base + beta_int2_1;
+#     {
+#       matrix[2,2] P = transition_matrix(d3a, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+# 
+#     // Post-second intervention: both interventions
+#     log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+#     log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+#     {
+#       matrix[2,2] P = transition_matrix(d3b, exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+# 
+#   } else {
+#     // No split: use midpoint check
+#     real midpoint = (t0l + t1l) / 2;
+# 
+#     if (midpoint >= t_star2 && intervention[n] == 1) {
+#       log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+#       log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+#     } else if (midpoint >= t_star1 && intervention[n] == 1) {
+#       log_lambda_1_2 = log12_base + s12l + beta_int1_1;
+#       log_lambda_2_1 = log21_base + beta_int2_1;
+#     } else {
+#       log_lambda_1_2 = log12_base + s12l;
+#       log_lambda_2_1 = log21_base;
+#     }
+# 
+#     {
+#       matrix[2,2] P = transition_matrix(last_subinterval_sim[n], exp(log_lambda_1_2), exp(log_lambda_2_1));
+#       next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+#       if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+#       if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+#       if (current_state == 1) at_risk_acquisition[n] += 1;
+#       if (current_state == 2) at_risk_decolonisation[n] += 1;
+#       
+#       current_state = next_state;
+#       P_total *= P;
+#     }
+#   }
+# }
+# 
+#        // --- Final update (safe after continue)
+#       //real midpoint_final = (date_use[n - 1] + date_use[n]) / 2;
+#       //int flag1_final = (intervention[n] == 1 && midpoint_final >= t_star1) ? 1 : 0;
+#       //int flag2_final = (intervention[n] == 1 && midpoint_final >= t_star2) ? 1 : 0;
+#       
+#       vector[2] probs = to_vector(P_total[observed_state[n - 1]]);
+#       int final_state = categorical_rng(probs / sum(probs));
+#       if (observed_state[n - 1] == 1 && final_state == 2) acquisitions[n] += 1;
+#       if (observed_state[n - 1] == 2 && final_state == 1) decolonisations[n] += 1;
+#       if (observed_state[n - 1] == 1) at_risk_acquisition[n] += 1;
+#       if (observed_state[n - 1] == 2) at_risk_decolonisation[n] += 1;
+# 
+#       observed_state[n] = final_state;
+#       y_rep[n] = observed_state[n];
+#       log_lambda_1_2_out[n] = log_lambda_1_2;
+#       log_lambda_2_1_out[n] = log_lambda_2_1;
+#       
+#       //int idx_log = idx_last_sim[n];
+#       //real s12_final = Y_hat_1_2_out[idx_log];
+#     }
+#     print(\"n: \", n, 
+#           \", beta_int1_1: \", beta_int1_1, \", beta_int1_2: \", beta_int1_2, 
+#           \", log_lambda_1_2: \", log_lambda_1_2);
+#     
+# 
+#     log_lambda_1_2_out[n] = log_lambda_1_2; // log12_base + s12_final + flag1_final * beta_int1_1 + flag2_final * beta_int1_2;
+#     log_lambda_2_1_out[n] = log_lambda_2_1; // log21_base + flag1_final * beta_int2_1 + flag2_final * beta_int2_2;
+#   }
+# }
+# "
+
 stan_code <- "
 functions {
   matrix transition_matrix(real t, real lambda_1_2, real lambda_2_1) {
@@ -726,251 +1080,450 @@ generated quantities {
   # For example, if phi = 0, the effect peaks at the start of the study.
 
   for (i in 1:num_data) {
-     Y_hat_1_2_out[i] = a1 * sin(2 * pi() * X[i] + phi);  
+     Y_hat_1_2_out[i] = a1 * sin(2 * pi() * X[i] + phi);
   }
 
-  for (n in 1:N) {
+    for (n in 1:N) {
     real log12_base = q_1_2_base + u[HouseID[n]] + beta_1_2_age * age[n] + beta_1_2_sexe * sexe[n];
     real log21_base = q_2_1_base + u[HouseID[n]] + beta_2_1_age * age[n] + beta_2_1_sexe * sexe[n];
     real t_star1 = intervention_date[n];
     real t_star2 = intervention_date2[n];
-   
 
-    // Handle first observation in household
     if (n == 1 || menage_id_member[n] != menage_id_member[n - 1]) {
       observed_state[n] = obs[n];
       y_rep[n] = observed_state[n];
-     
 
       int i0 = idx_first_sim[n];
-      real s12 = Y_hat_1_2_out[i0]; # This identifies the seasonal effect at the time of the observation (i0 is the time of the first observation)
-
-      log_lambda_1_2 = log12_base;
+      real s12 = Y_hat_1_2_out[i0];
+      log_lambda_1_2 = log12_base + s12;
       log_lambda_2_1 = log21_base;
-
-      matrix[2, 2] P_total = diag_matrix(rep_vector(1.0, 2));
-      continue;  // prevents illegal access to observed_state[n - 1]
+      continue;
     } else {
-
-      // Cumulative transition matrix
       matrix[2, 2] P_total = diag_matrix(rep_vector(1.0, 2));
-      
       int current_state = observed_state[n - 1];
       int next_state;
-         
+
       // --- First subinterval
-if (first_subinterval_sim[n] > 0) {
-  int i1 = idx_first_sim[n];
-  real s12 = Y_hat_1_2_out[i1];
-  real t0 = date_use[n - 1];
-  real t1 = t0 + first_subinterval_sim[n] - 1;
+      if (first_subinterval_sim[n] > 0) {
+        int i1 = idx_first_sim[n]; 
+        real s12 = Y_hat_1_2_out[i1];
+        real t0 = date_use[n - 1];
+        real t1 = t0 + first_subinterval_sim[n] - 1;
 
-  // In the first subinterval:
-  // If the first intervention date (t_star1) lies in this interval,
-  // and intervention 1 is actually applied, we split into:
-  //    1. Pre-intervention (baseline only)
-  //    2. Post-intervention 1 (effect of the first intervention)
-  // If intervention 1 does NOT belong to this subinterval, then
-  // intervention 2 also cannot happen (due to 3 months separation),
-  // so we only use baseline + seasonality for the whole subinterval.
-  if (t0 < t_star1 && t_star1 < t1 && intervention[n] == 1) {
-    real d1a = t_star1 - t0;         // duration before first intervention
-    real d1b = t1 - t_star1 + 1;     // duration after first intervention
+        if (intervention[n] == 1 &&
+            ((t0 < t_star1 && t_star1 < t1) || (t0 < t_star2 && t_star2 < t1))) {
 
-    // --- Pre-intervention 1: baseline (no interventions)
-    log_lambda_1_2 = log12_base + s12;
-    log_lambda_2_1 = log21_base;
-    
-{
-      matrix[2,2] P = transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      current_state = next_state;
-      P_total *= P;
-    }
-    
-    // --- Post-intervention 1: add first intervention effect
-    log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
-    
-  {
-      matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
-    
-  } else {
-    // --- No first intervention effect in this subinterval:
-    // apply only baseline + seasonality
-    log_lambda_1_2 = log12_base + s12;
-    log_lambda_2_1 = log21_base;
-    
-  {
-      matrix[2,2] P = transition_matrix(first_subinterval_sim[n], exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
-  }
-}
-// --- Middle subintervals
-for (m in 1:num_middle_subintervals_sim[n]) {
-  int im = idx_middle_sim[n, m];
-  real s12m = Y_hat_1_2_out[im];
-  real t0m = global_interval_start + (global_interval_index_start[n] + m - 1) * interval_length;
-  real t1m = t0m + interval_length - 1;
+          if (t0 < t_star1 && t_star1 < t_star2 && t_star2 < t1) {
+            real d1 = t_star1 - t0;
+            real d2 = t_star2 - t_star1;
+            real d3 = t1 - t_star2 + 1;
 
-  if (t0m < t_star1 && t_star1 < t1m && intervention[n] == 1) {
-    // CASE 1: First intervention lies inside the subinterval → split
-    real d2a = t_star1 - t0m;
-    real d2b = t1m - t_star1 + 1;
+            // Pre-intervention
+            log_lambda_1_2 = log12_base + s12;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
 
-    // --- Pre-intervention: baseline + seasonality
-    log_lambda_1_2 = log12_base + s12m;
-    log_lambda_2_1 = log21_base;
-    {
-      matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
+            // Post-intervention 1
+            log_lambda_1_2 = log12_base + s12 + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
 
-    // --- Post-intervention 1
-    log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
-    {
-      matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
+            // Post-intervention 2
+            log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            {
+              matrix[2,2] P = transition_matrix(d3, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
 
-  } else {
-    // CASE 2: First intervention does NOT lie inside → use midpoint logic
-    real midpoint = (t0m + t1m) / 2;
+          } else if (t0 < t_star2 && t_star2 < t1) {
+            real d1 = t_star2 - t0;
+            real d2 = t1 - t_star2 + 1;
 
-    if (midpoint >= t_star2 && intervention[n] == 1) {
-      log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
-    } else if (midpoint >= t_star1 && intervention[n] == 1) {
-      log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-      log_lambda_2_1 = log21_base + beta_int2_1;
-    } else {
-      log_lambda_1_2 = log12_base + s12m;
-      log_lambda_2_1 = log21_base;
-    }
+            log_lambda_1_2 = log12_base + s12;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
 
-    {
-      matrix[2,2] P = transition_matrix(interval_length, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
-  }
-}
-// --- Last subinterval
-if (last_subinterval_sim[n] > 0) {
-  int il = idx_last_sim[n];
-  real s12l = Y_hat_1_2_out[il];
-  real t1l = date_use[n];
-  real t0l = t1l - last_subinterval_sim[n] + 1;
+            log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
 
-  if (t0l < t_star2 && t_star2 < t1l && intervention[n] == 1) {
-    // Split at second intervention (intervention group only)
-    real d3a = t_star2 - t0l;       // Before second intervention
-    real d3b = t1l - t_star2 + 1;   // After second intervention
+          } else if (t0 < t_star1 && t_star1 < t1) {
+            real d1 = t_star1 - t0;
+            real d2 = t1 - t_star1 + 1;
 
-    // Pre-second intervention: first intervention only
-    log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-    log_lambda_2_1 = log21_base + beta_int2_1;
-    {
-      matrix[2,2] P = transition_matrix(d3a, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
+            log_lambda_1_2 = log12_base + s12;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
 
-    // Post-second intervention: both interventions
-    log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-    log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
-    {
-      matrix[2,2] P = transition_matrix(d3b, exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
+            log_lambda_1_2 = log12_base + s12 + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+          }
 
-  } else {
-    // No split: use midpoint check
-    real midpoint = (t0l + t1l) / 2;
+        } else {
+          // No intervention split
+          log_lambda_1_2 = log12_base + s12;
+          log_lambda_2_1 = log21_base;
+          {
+            matrix[2,2] P = transition_matrix(first_subinterval_sim[n], exp(log_lambda_1_2), exp(log_lambda_2_1));
+            next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+            if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+            if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+            if (current_state == 1) at_risk_acquisition[n] += 1;
+            if (current_state == 2) at_risk_decolonisation[n] += 1;
+            current_state = next_state;
+            P_total *= P;
+          }
+        }
+      }
+ // --- Middle subintervals
+      for (m in 1:num_middle_subintervals_sim[n]) {
+        int im = idx_middle_sim[n, m];
+        real s12m = Y_hat_1_2_out[im];
+        real t0m = global_interval_start + (global_interval_index_start[n] + m - 1) * interval_length;
+        real t1m = t0m + interval_length - 1;
 
-    if (midpoint >= t_star2 && intervention[n] == 1) {
-      log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
-    } else if (midpoint >= t_star1 && intervention[n] == 1) {
-      log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-      log_lambda_2_1 = log21_base + beta_int2_1;
-    } else {
-      log_lambda_1_2 = log12_base + s12l;
-      log_lambda_2_1 = log21_base;
-    }
+        if (intervention[n] == 1 &&
+            ((t0m < t_star1 && t_star1 < t1m) || (t0m < t_star2 && t_star2 < t1m))) {
 
-    {
-      matrix[2,2] P = transition_matrix(last_subinterval_sim[n], exp(log_lambda_1_2), exp(log_lambda_2_1));
-      next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
-      if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
-      if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
-      if (current_state == 1) at_risk_acquisition[n] += 1;
-      if (current_state == 2) at_risk_decolonisation[n] += 1;
-      
-      current_state = next_state;
-      P_total *= P;
-    }
-  }
-}
+          if (t0m < t_star1 && t_star1 < t_star2 && t_star2 < t1m) {
+            real d1 = t_star1 - t0m;
+            real d2 = t_star2 - t_star1;
+            real d3 = t1m - t_star2 + 1;
 
-       // --- Final update (safe after continue)
-      //real midpoint_final = (date_use[n - 1] + date_use[n]) / 2;
-      //int flag1_final = (intervention[n] == 1 && midpoint_final >= t_star1) ? 1 : 0;
-      //int flag2_final = (intervention[n] == 1 && midpoint_final >= t_star2) ? 1 : 0;
-      
+            log_lambda_1_2 = log12_base + s12m;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            {
+              matrix[2,2] P = transition_matrix(d3, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+          } else if (t0m < t_star2 && t_star2 < t1m) {
+            real d1 = t_star2 - t0m;
+            real d2 = t1m - t_star2 + 1;
+
+            log_lambda_1_2 = log12_base + s12m;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+          } else if (t0m < t_star1 && t_star1 < t1m) {
+            real d1 = t_star1 - t0m;
+            real d2 = t1m - t_star1 + 1;
+
+            log_lambda_1_2 = log12_base + s12m;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+          }
+
+        } else {
+          // No intervention during this interval: use midpoint logic
+          real midpoint = (t0m + t1m) / 2;
+
+          if (midpoint >= t_star2 && intervention[n] == 1) {
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          } else if (midpoint >= t_star1 && intervention[n] == 1) {
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+          } else {
+            log_lambda_1_2 = log12_base + s12m;
+            log_lambda_2_1 = log21_base;
+          }
+
+          {
+            matrix[2,2] P = transition_matrix(interval_length, exp(log_lambda_1_2), exp(log_lambda_2_1));
+            next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+            if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+            if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+            if (current_state == 1) at_risk_acquisition[n] += 1;
+            if (current_state == 2) at_risk_decolonisation[n] += 1;
+            current_state = next_state;
+            P_total *= P;
+          }
+        }
+      }
+      // --- Last subinterval
+      if (last_subinterval_sim[n] > 0) {
+        int il = idx_last_sim[n];
+        real s12l = Y_hat_1_2_out[il];
+        real t1l = date_use[n];
+        real t0l = t1l - last_subinterval_sim[n] + 1;
+
+        if (intervention[n] == 1 &&
+            ((t0l < t_star1 && t_star1 < t1l) || (t0l < t_star2 && t_star2 < t1l))) {
+
+          if (t0l < t_star1 && t_star1 < t_star2 && t_star2 < t1l) {
+            real d1 = t_star1 - t0l;
+            real d2 = t_star2 - t_star1;
+            real d3 = t1l - t_star2 + 1;
+
+            log_lambda_1_2 = log12_base + s12l;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            {
+              matrix[2,2] P = transition_matrix(d3, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+          } else if (t0l < t_star2 && t_star2 < t1l) {
+            real d1 = t_star2 - t0l;
+            real d2 = t1l - t_star2 + 1;
+
+            log_lambda_1_2 = log12_base + s12l;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+          } else if (t0l < t_star1 && t_star1 < t1l) {
+            real d1 = t_star1 - t0l;
+            real d2 = t1l - t_star1 + 1;
+
+            log_lambda_1_2 = log12_base + s12l;
+            log_lambda_2_1 = log21_base;
+            {
+              matrix[2,2] P = transition_matrix(d1, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+            {
+              matrix[2,2] P = transition_matrix(d2, exp(log_lambda_1_2), exp(log_lambda_2_1));
+              next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+              if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+              if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+              if (current_state == 1) at_risk_acquisition[n] += 1;
+              if (current_state == 2) at_risk_decolonisation[n] += 1;
+              current_state = next_state;
+              P_total *= P;
+            }
+          }
+
+        } else {
+          // No intervention in this interval — midpoint logic
+          real midpoint = (t0l + t1l) / 2;
+
+          if (midpoint >= t_star2 && intervention[n] == 1) {
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          } else if (midpoint >= t_star1 && intervention[n] == 1) {
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1;
+            log_lambda_2_1 = log21_base + beta_int2_1;
+          } else {
+            log_lambda_1_2 = log12_base + s12l;
+            log_lambda_2_1 = log21_base;
+          }
+
+          {
+            matrix[2,2] P = transition_matrix(last_subinterval_sim[n], exp(log_lambda_1_2), exp(log_lambda_2_1));
+            next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
+            if (current_state == 1 && next_state == 2) acquisitions[n] += 1;
+            if (current_state == 2 && next_state == 1) decolonisations[n] += 1;
+            if (current_state == 1) at_risk_acquisition[n] += 1;
+            if (current_state == 2) at_risk_decolonisation[n] += 1;
+            current_state = next_state;
+            P_total *= P;
+          }
+        }
+      }
+
+      // --- Final update and output
       vector[2] probs = to_vector(P_total[observed_state[n - 1]]);
       int final_state = categorical_rng(probs / sum(probs));
       if (observed_state[n - 1] == 1 && final_state == 2) acquisitions[n] += 1;
@@ -979,20 +1532,10 @@ if (last_subinterval_sim[n] > 0) {
       if (observed_state[n - 1] == 2) at_risk_decolonisation[n] += 1;
 
       observed_state[n] = final_state;
-      y_rep[n] = observed_state[n];
+      y_rep[n] = final_state;
       log_lambda_1_2_out[n] = log_lambda_1_2;
       log_lambda_2_1_out[n] = log_lambda_2_1;
-      
-      //int idx_log = idx_last_sim[n];
-      //real s12_final = Y_hat_1_2_out[idx_log];
     }
-    print(\"n: \", n, 
-          \", beta_int1_1: \", beta_int1_1, \", beta_int1_2: \", beta_int1_2, 
-          \", log_lambda_1_2: \", log_lambda_1_2);
-    
-
-    log_lambda_1_2_out[n] = log_lambda_1_2; // log12_base + s12_final + flag1_final * beta_int1_1 + flag2_final * beta_int1_2;
-    log_lambda_2_1_out[n] = log_lambda_2_1; // log21_base + flag1_final * beta_int2_1 + flag2_final * beta_int2_2;
   }
 }
 "
@@ -1378,7 +1921,7 @@ p7 = ggplot(acq_summary_weekly, aes(x = Week, y = Sampled, fill = Time_Period)) 
   scale_fill_brewer(palette = "Set1")
 
 p8 =ggplot(acq_summary_weekly, aes(x = Week, y = AcquisitionRate, fill = Time_Period)) +
-  geom_col() +
+  geom_col(position = "dodge") +
   facet_wrap(~ Intervention, scales = "free_x") +
   geom_text(aes(label = AtRisk_Acquisitions), vjust = -0.5, size = 2.5) +
   labs(title = "Weekly Acquisition rate",
@@ -1486,7 +2029,7 @@ p10 = ggplot(seasonal_pattern, aes(x = Date, y = Seasonal_Effect)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   theme_minimal()+ geom_vline(xintercept = c(0.5, 1.0), linetype = "dashed", color = "red")
 
-pdf(file = "./Output/Figures/Simulated_data/simulated_data_check_noseasonality.pdf", width = 15, height = 8)
+pdf(file = "./Output/Figures/Simulated_data/simulated_data_check_noseasonality2.pdf", width = 15, height = 8)
 
 # Loop over a list of plots
 grid.table(lambda_summary_stats[c(1,4,2,3),])

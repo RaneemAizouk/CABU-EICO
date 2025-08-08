@@ -76,6 +76,11 @@ scen_df = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_season
 sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
 sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
 
+# When run locally
+#sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
+#sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
+
+
 # Set up spline basis
 #------------------------------------------------------------------------------
 num_knots <- 5

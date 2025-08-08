@@ -6,20 +6,16 @@ knots <- seq(0, 1, length.out = num_knots)
 
 knots <- as.numeric(knots)
 spline_degree <- 3
-num_basis <- num_knots + spline_degree - 1
+num_basis <- num_knots + spline_degree 
 
 library(rstan)
 
-# ─── Ensure all required columns exist in simulated_dataset ─────────────────────
-simulated_dataset$age <- if (!"age" %in% names(simulated_dataset)) age else simulated_dataset$age
-simulated_dataset$sexe <- if (!"sexe" %in% names(simulated_dataset)) sexe else simulated_dataset$sexe
-simulated_dataset$round <- if (!"Round" %in% names(simulated_dataset)) rounds else simulated_dataset$Round
 
 # Dates need to be numeric for Stan
 simulated_dataset$date_use <- as.numeric(simulated_dataset$Date)
 simulated_dataset$intervention_date <- as.numeric(simulated_dataset$Intervention_Date1)
 simulated_dataset$intervention_date2 <- as.numeric(simulated_dataset$Intervention_Date2)
-stan_data$intervention_village <- as.integer(simulated_dataset$Intervention)
+
 
 # Use these simulated variables from your simulation
 stan_data <- list(
@@ -27,26 +23,22 @@ stan_data <- list(
   HouseID = as.integer(simulated_dataset$HouseID),
   H = length(unique(simulated_dataset$HouseID)),
   VillageID = as.integer(simulated_dataset$VillageID),
-  intervention = simulated_dataset$Intervention,   # Corrected spacing
-  round = simulated_dataset$Round,
+  intervention = as.integer(simulated_dataset$Intervention),
+  round = as.integer(simulated_dataset$Round),
   age = as.integer(simulated_dataset$Age),
-  sexe = simulated_dataset$Sexe,
-  intervention_date = as.numeric(simulated_dataset$Intervention_Date1),  # Corrected spacing
+  sexe = as.integer(simulated_dataset$Sexe),
+  intervention_date = as.numeric(simulated_dataset$Intervention_Date1),
   intervention_date2 = as.numeric(simulated_dataset$Intervention_Date2),
-  
   N = N,
-  
   observed_state = as.integer(observed_state_sim),
   global_interval_start = as.numeric(global_interval_start),
   global_interval_end = as.numeric(global_interval_end),
   interval_length = interval_length,
   date_use = as.numeric(simulated_dataset$date_use),
-  
-  num_data = length(X),
-  X = X,  
+  X = X_seasonal, 
+  num_data = length(X_seasonal),
   max_middle = max_middle,
-  num_intervals = num_intervals,  # Removed extra comma
-  # Spline data for seasonality
+  num_intervals = num_intervals,
   num_knots = num_knots,
   knots = knots,
   spline_degree = spline_degree,
@@ -54,38 +46,27 @@ stan_data <- list(
 )
 
 
-
-stan_data$observed_state <- as.integer(observed_state_sim)
-stan_data$menage_id_member   <- as.integer(simulated_dataset$MenageID)
-stan_data$age                <- as.integer(simulated_dataset$Age)
-stan_data$round              <- as.integer(simulated_dataset$Round)
-stan_data$sexe               <- as.integer(simulated_dataset$Sexe)
-stan_data$date_use           <- as.numeric(simulated_dataset$Date)
-stan_data$intervention_date  <- as.numeric(simulated_dataset$Intervention_Date1)
-stan_data$intervention_date2 <- as.numeric(simulated_dataset$Intervention_Date2)
-
-
 str(stan_data)
 str(simulated_dataset)
 # Prepare data for Stan
 stan_model_full <- "
 functions {
-  // 2×2 CTMC transition matrix for a 2-state chain
-  matrix transition_matrix(real t,
-                           real lambda_1_2,
-                           real lambda_2_1) {
-    real total_lambda = lambda_1_2 + lambda_2_1;
-    real exp_term     = exp(-total_lambda * t);
-
+  matrix transition_matrix(real t, real lambda_1_2, real lambda_2_1) {
+    real total_lambda = lambda_1_2 + lambda_2_1;                           // Total transition rate (acquisitions and decolonisations)
+    real exp_term = total_lambda > 0 ? exp(-total_lambda * t) : 1.0;      // Exponential decay term
     matrix[2,2] P;
-    P[1,1] = (lambda_2_1 / total_lambda) + (lambda_1_2 / total_lambda) * exp_term;
-    P[2,2] = (lambda_1_2 / total_lambda) + (lambda_2_1 / total_lambda) * exp_term;
-    P[1,2] = (lambda_2_1 / total_lambda) * (1 - exp_term);
-    P[2,1] = (lambda_1_2 / total_lambda) * (1 - exp_term);
+    if (total_lambda == 0) {
+      P[1,1] = 1.0; P[1,2] = 0.0;                                          // No transition possible
+      P[2,1] = 0.0; P[2,2] = 1.0;
+    } else {
+      P[1,1] = (lambda_2_1 / total_lambda) + (lambda_1_2 / total_lambda) * exp_term;  // Prob staying in state 1
+      P[2,2] = (lambda_1_2 / total_lambda) + (lambda_2_1 / total_lambda) * exp_term;  // Prob staying in state 2
+      P[1,2] = (lambda_1_2 / total_lambda) * (1 - exp_term);                           // Prob moving from 1 to 2
+      P[2,1] = (lambda_2_1 / total_lambda) * (1 - exp_term);                           // Prob moving from 2 to 1
+    }
     return P;
   }
-
-    // Recursive function to compute B-spline basis functions
+// Recursive function to compute B-spline basis functions
   vector build_b_spline(real[] t,
                         real[] ext_knots,
                         int ind,
@@ -110,9 +91,7 @@ functions {
     return b_spline;
   }
 
-
-
- }
+}
 
 data {
   int<lower=1> N;
@@ -127,7 +106,7 @@ data {
   real global_interval_end;
   int<lower=1> interval_length;
   array[N] real date_use;
-  array[N] int intervention_village;
+  array[N] int intervention;
   int<lower=1> num_knots;
   vector[num_knots] knots;
   int<lower=0> spline_degree;
@@ -145,8 +124,9 @@ data {
 }
 
 transformed data {
-  int num_basis = num_knots + spline_degree -1;
-  matrix[num_basis, num_data] B;
+  int num_basis = num_knots + spline_degree ;
+   matrix[num_data, num_basis] B;
+
   // this part is mapping X=[0, 1.38] to [0,1]
   array[num_data] real X_mod;  // Declare X_mod
   // Compute X_mod = fmod(X, 1.0)
@@ -164,9 +144,8 @@ transformed data {
               append_row(knots, knots[1:(spline_degree+1)] + 1)
             );
 
-    for (ind in 1:num_basis)
-    B[ind, :] = to_row_vector(build_b_spline(X_mod, to_array_1d(ext_knots), ind, spline_degree + 1));
-
+  for (ind in 1:num_basis)
+    B[:, ind] = build_b_spline(X_mod, to_array_1d(ext_knots), ind, spline_degree + 1);
 
   array[N] real first_subinterval;
   array[N] real middle_subinterval;
@@ -291,19 +270,18 @@ parameters {
 
   row_vector[num_basis - spline_degree] a_raw_1_2_free;
   real log_tau_raw_1_2;
-
+  real a0_raw_1_2;
+  real<lower=0> sigma_a0_1_2;
 
 
   // Noise parameter for observation model
   real<lower=0> sigma;
 }
 
-
-
 transformed parameters {
   // ─── Base transition log-rates ───────────────────────────────────────────────
   real q_1_2_base = -4.79 + q_1_2_raw * sigma_q_1_2;
-  real q_2_1_base =  4.71 + q_2_1_raw * sigma_q_2_1;
+  real q_2_1_base = -4.71 + q_2_1_raw * sigma_q_2_1;
 
   vector[H] u = u_raw * sigma_u;
 
@@ -316,7 +294,7 @@ transformed parameters {
     a_raw_1_2[i] = a_raw_1_2_free[i];
 
   for (j in 1:spline_degree)
-    a_raw_1_2[num_basis - spline_degree + j] = a_raw_1_2_free[j];
+    a_raw_1_2[num_basis - spline_degree + j] = a_raw_1_2[j];
 
   // Scale by global variance
   real tau_1_2 = exp(log_tau_raw_1_2);
@@ -326,12 +304,11 @@ transformed parameters {
 
 
   // Final seasonal effect for infection (with linear + periodic terms)
-  vector[num_data] Y_hat_1_2 =  to_vector(a_1_2 * B);
+ vector[num_data] Y_hat_1_2 = to_vector(B * a_1_2');
+
 
   
 }
-
-
 
 
 
@@ -363,8 +340,6 @@ model {
 
   a_raw_1_2_free ~ normal(0, 1);
  
-
- 
   log_tau_raw_1_2 ~ normal(0, 0.5);
 
 
@@ -373,10 +348,6 @@ model {
 
   // Intervention‐specific effects (first and second)
 
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // LIKELIHOOD: FOR EACH PAIR OF SUCCESSIVE OBSERVATIONS (n−1 → n) WITHIN A PERSON
-  // ─────────────────────────────────────────────────────────────────────────────
    // ─────────────────────────────────────────────────────────────────────────────
   // LIKELIHOOD: FOR EACH PAIR OF SUCCESSIVE OBSERVATIONS (n−1 → n) WITHIN A PERSON
   // ─────────────────────────────────────────────────────────────────────────────
@@ -430,7 +401,7 @@ model {
         real log_lambda_1_2;
         real log_lambda_2_1;
         
-        if (t0 < t_star1 && t_star1 < t1) {
+        if (t0 < t_star1 && t_star1 < t1   && intervention[n] == 1 ){
         real d1a = t_star1 - t0;        // duration before first intervention
         real d1b = t1 - t_star1 + 1;    // duration after first intervention
 
@@ -441,8 +412,8 @@ model {
 
 
            // Post-intervention 1: add first intervention effect
-          log_lambda_1_2 = log12_base + s12 + intervention[n] * beta_int1_1;
-          log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
+          log_lambda_1_2 = log12_base + s12 +  beta_int1_1;
+          log_lambda_2_1 = log21_base +  beta_int2_1;
            P_total *= transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
         } else {
@@ -470,7 +441,7 @@ model {
          real log_lambda_1_2;
          real log_lambda_2_1;
         
-        if (t0m < t_star1 && t_star1 < t1m) {
+        if (t0m < t_star1 && t_star1 < t1m && intervention[n] == 1) {
           real d2a = t_star1 - t0m;          // time before first‐intervention in this bin
           real d2b = t1m - t_star1 + 1;  // time after first‐intervention (but before second)
           
@@ -487,8 +458,8 @@ model {
           );
 
           // Post-intervention part (only first intervention effect)
-         log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1;
-         log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
+         log_lambda_1_2 = log12_base + s12m + beta_int1_1;
+         log_lambda_2_1 = log21_base +  beta_int2_1;
           P_total *= transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
      
        } else {
@@ -497,12 +468,12 @@ model {
 
     if (midpoint >= t_star2) {
       // Both interventions cumulative
-    log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
-       log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1 +intervention[n] *  beta_int2_2;
+    log_lambda_1_2 = log12_base + s12m +  beta_int1_1 +  beta_int1_2;
+       log_lambda_2_1 = log21_base +  beta_int2_1 +  beta_int2_2;
     } else if (midpoint >= t_star1) {
       // Only first intervention
-      log_lambda_1_2 = log12_base + s12m + intervention[n] * beta_int1_1;
-    log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
+      log_lambda_1_2 = log12_base + s12m +  beta_int1_1;
+    log_lambda_2_1 = log21_base +  beta_int2_1;
     } else {
       // Baseline
      log_lambda_1_2 = log12_base + s12m;
@@ -530,19 +501,19 @@ if (last_subinterval[n] > 0) {
   real log_lambda_1_2;
   real log_lambda_2_1;
 
-  if (t0l < t_star2 && t_star2 < t1l) {
+  if (t0l < t_star2 && t_star2 < t1l  && intervention[n] == 1) {
     // Split at second intervention
     real d3a = t_star2 - t0l;       // before second intervention
     real d3b = t1l - t_star2 + 1;   // after second intervention
 
     // --- Pre-second intervention: only first intervention effect
-  log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1;
-    log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1;
+    log_lambda_1_2 = log12_base + s12l +  beta_int1_1;
+    log_lambda_2_1 = log21_base + beta_int2_1;
     P_total *= transition_matrix(d3a, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
     // --- Post-second intervention: both interventions
-  log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
-  log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1 +intervention[n] *  beta_int2_2;
+  log_lambda_1_2 = log12_base + s12l +  beta_int1_1 +  beta_int1_2;
+  log_lambda_2_1 = log21_base +  beta_int2_1 +  beta_int2_2;
     P_total *= transition_matrix(d3b, exp(log_lambda_1_2), exp(log_lambda_2_1));
 
   } else {
@@ -551,12 +522,12 @@ if (last_subinterval[n] > 0) {
 
     if (midpoint >= t_star2) {
       // Both interventions cumulative
-     log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1 + intervention[n] * beta_int1_2;
-      log_lambda_2_1 = log21_base +intervention[n] *  beta_int2_1 +intervention[n] *  beta_int2_2;
+     log_lambda_1_2 = log12_base + s12l +  beta_int1_1 + beta_int1_2;
+      log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
     } else if (midpoint >= t_star1) {
       // Only first intervention
-     log_lambda_1_2 = log12_base + s12l + intervention[n] * beta_int1_1;
-     log_lambda_2_1 = log21_base + intervention[n] *  beta_int2_1;
+     log_lambda_1_2 = log12_base + s12l +  beta_int1_1;
+     log_lambda_2_1 = log21_base +  beta_int2_1;
     } else {
       // Baseline (no interventions)
     log_lambda_1_2 = log12_base + s12l;

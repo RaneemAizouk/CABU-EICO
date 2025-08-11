@@ -68,11 +68,10 @@ cat("R sees scenario:", scenario, "\n")
 
 
 #------------------------------------------------------------------------------
-# LOAD IN DATA
+# If fitting the model to simulated data
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# If fitting the model to simulated data
+# Load in data
 #------------------------------------------------------------------------------
 
 scen = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality_stan_data", "Simulated_data_noseasonality_stan_data")
@@ -121,6 +120,9 @@ names(stan_data_fit)
 #---------------------------------------------------------------------------
 # If fitting the model to observed data cancel the below out
 #---------------------------------------------------------------------------
+
+# Load in data
+#------------------------------------------------------------------------------
 
 #stan_data_fit = readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
 

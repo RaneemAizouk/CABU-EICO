@@ -7,6 +7,7 @@
 # SIMULATED DATA: Seasonality
 # MODEL FITTING: Seasonality with spline
 # ------------------------------------------------------------------------------
+
 # Date created: 1 July 2025
 # Date last updated: 1 August 2025
 # Author: Raneem Aizouk
@@ -57,6 +58,7 @@ output_dir <- paste0("./CABU_EICO/model-output/Simulated_data/")
 # num_middle_subintervals: Number of full 28-day global intervals strictly between date1 and date2
 
 # Cluster set up
+#------------------------------------------------------------------------------
 
 # Get command-line arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -66,8 +68,11 @@ scenario <- if (length(args) >= 1) args[[1]] else "Two_step_spline_seasonality"
 
 cat("R sees scenario:", scenario, "\n")
 
+#------------------------------------------------------------------------------
+# If fitting the model to simulated data
+#------------------------------------------------------------------------------
 
-# LOAD IN DATA
+# Load in data
 #------------------------------------------------------------------------------
 
 scen = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality_stan_data", "Simulated_data_noseasonality_stan_data")
@@ -79,11 +84,6 @@ sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
 # When run locally
 #sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
 #sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
-
-
-#------------------------------------------------------------------------------
-# If fitting the model to simulated data
-#------------------------------------------------------------------------------
 
 # Set up spline basis
 #------------------------------------------------------------------------------
@@ -138,6 +138,9 @@ names(stan_data_fit)
 
 #----------------------------------------------------------------------------
 # If fitting the model to observed data cancel the below out
+#----------------------------------------------------------------------------
+
+# Load in data
 #----------------------------------------------------------------------------
 
 #stan_data_fit = readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")

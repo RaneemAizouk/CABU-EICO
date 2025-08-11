@@ -66,7 +66,13 @@ scenario <- if (length(args) >= 1) args[[1]] else "Two_step_sine_seasonality"
 
 cat("R sees scenario:", scenario, "\n")
 
+
+#------------------------------------------------------------------------------
 # LOAD IN DATA
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# If fitting the model to simulated data
 #------------------------------------------------------------------------------
 
 scen = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality_stan_data", "Simulated_data_noseasonality_stan_data")
@@ -111,6 +117,16 @@ stan_data_fit <- list(
   global_interval_index_start = sim_df$Global_Interval_Index_Start
 )
 names(stan_data_fit)
+
+#---------------------------------------------------------------------------
+# If fitting the model to observed data cancel the below out
+#---------------------------------------------------------------------------
+
+#stan_data_fit = readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
+
+#---------------------------------------------------------------------------
+# Model code
+#---------------------------------------------------------------------------
 
 
 ######
@@ -677,10 +693,16 @@ generated quantities {
   }
 }
  "  
+#---------------------------------------------------------------------------
 # Compile the Stan model
+#---------------------------------------------------------------------------
+
 compiled_model_fit <- stan_model(model_code = stan_code, verbose = TRUE)
 
+#---------------------------------------------------------------------------
 # Fit the model
+#---------------------------------------------------------------------------
+
 stan_fit <- sampling(
   object = compiled_model_fit,
   data = stan_data_fit,
@@ -693,6 +715,10 @@ stan_fit <- sampling(
   verbose = TRUE,
   control = list(adapt_delta = 0.95, max_treedepth = 12) # Adjust for convergence
 )
+
+#---------------------------------------------------------------------------
+# Save model fit
+#---------------------------------------------------------------------------
 
 saveRDS(stan_fit, file = paste0(output_dir,scenario, ".rds"))
 

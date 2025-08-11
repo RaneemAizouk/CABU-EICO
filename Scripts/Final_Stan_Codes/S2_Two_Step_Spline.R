@@ -20,7 +20,7 @@ pacman::p_load(rstan,dplyr,lubridate, tidyr)
 
 # Define output directory
 output_dir <- paste0("./CABU_EICO/model-output/Simulated_data/")
-scenario <- scenario
+#scenario <- scenario
 
 
 # Simulated data:
@@ -81,6 +81,10 @@ sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
 #sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
 
 
+#------------------------------------------------------------------------------
+# If fitting the model to simulated data
+#------------------------------------------------------------------------------
+
 # Set up spline basis
 #------------------------------------------------------------------------------
 num_knots <- 5
@@ -132,8 +136,16 @@ stan_data_fit <- list(
 
 names(stan_data_fit)
 
+#----------------------------------------------------------------------------
+# If fitting the model to observed data cancel the below out
+#----------------------------------------------------------------------------
 
-######
+#stan_data_fit = readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
+
+#---------------------------------------------------------------------------
+# Stan model code
+#---------------------------------------------------------------------------
+
 stan_code <- "functions {
  matrix transition_matrix(real t, real lambda_1_2, real lambda_2_1) {
     real total_lambda = lambda_1_2 + lambda_2_1;
@@ -1131,10 +1143,16 @@ generated quantities {
   }
 }
  "  
+#---------------------------------------------------------------------------
 # Compile the Stan model
+#---------------------------------------------------------------------------
+
 compiled_model_fit <- stan_model(model_code = stan_code, verbose = TRUE)
 
+#---------------------------------------------------------------------------
 # Fit the model
+#---------------------------------------------------------------------------
+
 stan_fit <- sampling(
   object = compiled_model_fit,
   data = stan_data_fit,
@@ -1147,6 +1165,10 @@ stan_fit <- sampling(
   verbose = TRUE,
   control = list(adapt_delta = 0.95, max_treedepth = 12) # Adjust for convergence
 )
+
+#---------------------------------------------------------------------------
+# Save output 
+#---------------------------------------------------------------------------
 
 saveRDS(stan_fit, file = paste0(output_dir,scenario, ".rds"))
 

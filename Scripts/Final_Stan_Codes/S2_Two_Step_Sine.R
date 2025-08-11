@@ -12,16 +12,33 @@
 # Author: Raneem Aizouk
 
 rm(list=ls())
-scenario <- Sys.getenv("scenario", "Two_step_sine_seasonality")
+
+#------------------------------------------------------------------------------
+# Cluster set up
+#------------------------------------------------------------------------------
+# Get command-line arguments or use defaults
+args <- commandArgs(trailingOnly = TRUE)
+
+#scenario    <- if (length(args) >= 1) args[[1]] else Sys.getenv("scenario", "Two_step_sine_seasonality")
+#data_source <- if (length(args) >= 2) args[[2]] else Sys.getenv("data_source", "simulated")
+
+scenario    <- Sys.getenv("scenario", "Two_step_sine_seasonality")
+data_source <- Sys.getenv("data_source", "simulated")
+
 cat("R sees scenario:", scenario, "\n")
+cat("R sees data_source:", data_source, "\n")
+
+# Set output directory based on data source
+if (data_source == "simulated") {
+  output_dir <- "./CABU_EICO/model-output/Simulated_data/"
+} else if (data_source == "observed") {
+  output_dir <- "./CABU_EICO/model-output/Observed_data/"
+}
+
+output_dir <- file.path(output_dir)
 
 # Load libraries
 pacman::p_load(rstan,dplyr,lubridate, tidyr)
-
-# Define output directory
-output_dir <- paste0("./CABU_EICO/model-output/Simulated_data/")
-scenario <- scenario
-
 
 # Simulated data:
 #  Acquisition rate (1→2) includes seasonal effect: sine wave (sin(2πx)).
@@ -36,7 +53,7 @@ scenario <- scenario
 # Evaluate if spline-based fitting can recover sinusoidal acquisition pattern.
 
 #-----------------------------------------------------
-# Timing Variables Explained
+# Timing Variables     
 # ------------------------------------------------------
 # date1: The start date of the observation interval for a specific individual (usually previous visit date)
 # date2: The end date of the observation interval for a specific individual (usually current visit date)
@@ -56,82 +73,68 @@ scenario <- scenario
 
 # num_middle_subintervals: Number of full 28-day global intervals strictly between date1 and date2
 
-# Cluster set up
-
-# Get command-line arguments
-args <- commandArgs(trailingOnly = TRUE)
-
-# Read scenario or use default
-scenario <- if (length(args) >= 1) args[[1]] else "Two_step_sine_seasonality"
-
-cat("R sees scenario:", scenario, "\n")
-
 
 #------------------------------------------------------------------------------
-# If fitting the model to simulated data
-#------------------------------------------------------------------------------
-
 # Load in data
 #------------------------------------------------------------------------------
 
-scen = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality_stan_data", "Simulated_data_noseasonality_stan_data")
-scen_df = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality", "Simulated_data_noseasonality")
+if (data_source == "simulated") {
+  scen = ifelse(scenario=="Two_step_sine_seasonality",
+                "Simulated_data_seasonality_stan_data",
+                "Simulated_data_noseasonality_stan_data")
+  scen_df = ifelse(scenario=="Two_step_sine_seasonality",
+                   "Simulated_data_seasonality",
+                   "Simulated_data_noseasonality")
+  
+  sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
+  sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
+  
+  # When run locally
+  #sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
+  #sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
+  
+  stan_data_fit <- list(
+    N = nrow(sim_df),
+    N_persons = length(unique(sim_df$MenagememberID)),
+    H = length(unique(sim_df$HouseID)),
+    HouseID = sim_df$HouseID,
+    menage_id_member = sim_df$MenagememberID,
+    age = sim_df$Age,
+    round = sim_df$Round,
+    sexe = sim_df$Sexe,
+    observed_state = sim_df$Observed_State_Sim,
+    date_use = sim_df$date_use_num,
+    intervention = sim_df$Intervention,
+    intervention_date = sim_stan_data$intervention_date,
+    intervention_date2 = sim_stan_data$intervention_date2,
+    global_interval_start = sim_stan_data$global_interval_start,
+    global_interval_end = sim_stan_data$global_interval_end,
+    interval_length = sim_stan_data$interval_length,
+    num_data = length(sim_stan_data$X),
+    X = sim_stan_data$X,
+    max_middle = sim_stan_data$max_middle,
+    num_intervals = sim_stan_data$num_data,
+    idx_first_sim = sim_df$Idx_First_Sim,
+    idx_last_sim = sim_df$Idx_Last_Sim,
+    idx_middle_sim = sim_stan_data[["idx_middle_sim"]],
+    first_subinterval_sim = sim_df$First_Subinterval_Sim,
+    last_subinterval_sim = sim_df$Last_Subinterval_Sim,
+    num_middle_subintervals_sim = sim_df$Num_Middle_Subintervals_Sim,
+    global_interval_index_start = sim_df$Global_Interval_Index_Start
+  )
+  
+} else if (data_source == "observed") {
+  stan_data_fit <- readRDS("./CABU_EICO/data/Observed_data/bf_stan_data_all.rds")
+  # If run locally
+  #stan_data_fit <- readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
+}
 
-sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
-sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
-
-# When run locally
-#sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
-#sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
-
-idx_middle_sim = sim_stan_data[["idx_middle_sim"]]
-
-stan_data_fit <- list(
-  N = nrow(sim_df),
-  N_persons = length(unique(sim_df$MenagememberID)),
-  H = length(unique(sim_df$HouseID)),
-  HouseID = sim_df$HouseID,
-  menage_id_member = sim_df$MenagememberID,
-  age = sim_df$Age,
-  round = sim_df$Round,
-  sexe = sim_df$Sexe,
-  observed_state = sim_df$Observed_State_Sim,
-  date_use = sim_df$date_use_num,
-  intervention = sim_df$Intervention,
-  intervention_date = sim_stan_data$intervention_date,
-  intervention_date2 = sim_stan_data$intervention_date2,
-  global_interval_start = sim_stan_data$global_interval_start,
-  global_interval_end = sim_stan_data$global_interval_end,
-  interval_length = sim_stan_data$interval_length,
-  num_data = length(sim_stan_data$X),
-  X = sim_stan_data$X,
-  max_middle = sim_stan_data$max_middle,
-  num_intervals = sim_stan_data$num_data,
-  idx_first_sim = sim_df$Idx_First_Sim,
-  idx_last_sim = sim_df$Idx_Last_Sim,
-  idx_middle_sim = idx_middle_sim,
-  first_subinterval_sim = sim_df$First_Subinterval_Sim,
-  last_subinterval_sim = sim_df$Last_Subinterval_Sim,
-  num_middle_subintervals_sim = sim_df$Num_Middle_Subintervals_Sim,
-  global_interval_index_start = sim_df$Global_Interval_Index_Start
-)
 names(stan_data_fit)
-
-#---------------------------------------------------------------------------
-# If fitting the model to observed data cancel the below out
-#---------------------------------------------------------------------------
-
-# Load in data
-#------------------------------------------------------------------------------
-
-#stan_data_fit = readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
 
 #---------------------------------------------------------------------------
 # Model code
 #---------------------------------------------------------------------------
 
-
-######
 stan_code <- "functions {
   matrix transition_matrix(real t, real lambda_1_2, real lambda_2_1) {
     real total_lambda = lambda_1_2 + lambda_2_1;
@@ -268,7 +271,7 @@ parameters {
   real<lower=0> sigma_q_1_2;
   real<lower=0> sigma_q_2_1;
   real<lower=0> sigma;
-  real a1;
+  real<lower=0> a1;
   real<lower=0, upper=2*pi()> phi;
   real beta_int1_1;
   real beta_int1_2;
@@ -302,7 +305,7 @@ model {
   u_raw ~ normal(0, 0.5);
   sigma_u ~ normal(0, 0.5);
   sigma ~ normal(0, 1);
-  a1 ~ normal(0, 0.5);
+  a1 ~ normal(0.5, 1);
   phi ~ normal(pi() / 2, 0.5);
   
   for (n in 2:N) {
@@ -699,6 +702,15 @@ generated quantities {
 # Compile the Stan model
 #---------------------------------------------------------------------------
 
+keep_pars <- c(
+  # core params
+  "a1","phi","q_1_2_raw","q_2_1_raw",
+  "beta_1_2_age","beta_2_1_age","beta_1_2_sexe","beta_2_1_sexe",
+  "beta_int1_1","beta_int1_2","beta_int2_1","beta_int2_2",
+  "sigma","sigma_u","sigma_q_1_2","sigma_q_2_1","Y_hat_1_2_out",
+  "log_lambda_1_2_out","log_lambda_2_1_out"
+)
+
 compiled_model_fit <- stan_model(model_code = stan_code, verbose = TRUE)
 
 #---------------------------------------------------------------------------
@@ -715,6 +727,7 @@ stan_fit <- sampling(
   cores = 4,          # Parallel processing
   seed = 123,
   verbose = TRUE,
+  pars = keep_pars, include = TRUE, save_warmup = FALSE,
   control = list(adapt_delta = 0.95, max_treedepth = 12) # Adjust for convergence
 )
 
@@ -722,7 +735,7 @@ stan_fit <- sampling(
 # Save model fit
 #---------------------------------------------------------------------------
 
-saveRDS(stan_fit, file = paste0(output_dir,scenario, ".rds"))
+saveRDS(stan_fit, file = paste0(output_dir,scenario,data_source, ".rds"))
 
 print(summary(stan_fit)$summary)
 

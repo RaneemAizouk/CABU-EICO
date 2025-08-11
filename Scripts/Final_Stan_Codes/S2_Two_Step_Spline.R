@@ -13,15 +13,34 @@
 # Author: Raneem Aizouk
 
 rm(list=ls())
-scenario <- Sys.getenv("scenario", "Two_step_spline_seasonality")
+
+#------------------------------------------------------------------------------
+# Cluster set up
+#------------------------------------------------------------------------------
+
+# Get command-line arguments or use defaults
+args <- commandArgs(trailingOnly = TRUE)
+
+#scenario    <- if (length(args) >= 1) args[[1]] else Sys.getenv("scenario", "Two_step_spline_seasonality")
+#data_source <- if (length(args) >= 2) args[[2]] else Sys.getenv("data_source", "simulated")
+
+scenario    <- Sys.getenv("scenario", "Two_step_spline_seasonality")
+data_source <- Sys.getenv("data_source", "simulated")
+
 cat("R sees scenario:", scenario, "\n")
+cat("R sees data_source:", data_source, "\n")
+
+# Set output directory based on data source
+if (data_source == "simulated") {
+  output_dir <- "./CABU_EICO/model-output/Simulated_data/"
+} else if (data_source == "observed") {
+  output_dir <- "./CABU_EICO/model-output/Observed_data/"
+}
+
+output_dir <- file.path(output_dir)
 
 # Load libraries
 pacman::p_load(rstan,dplyr,lubridate, tidyr)
-
-# Define output directory
-output_dir <- paste0("./CABU_EICO/model-output/Simulated_data/")
-#scenario <- scenario
 
 
 # Simulated data:
@@ -57,33 +76,6 @@ output_dir <- paste0("./CABU_EICO/model-output/Simulated_data/")
 
 # num_middle_subintervals: Number of full 28-day global intervals strictly between date1 and date2
 
-# Cluster set up
-#------------------------------------------------------------------------------
-
-# Get command-line arguments
-args <- commandArgs(trailingOnly = TRUE)
-
-# Read scenario or use default
-scenario <- if (length(args) >= 1) args[[1]] else "Two_step_spline_seasonality"
-
-cat("R sees scenario:", scenario, "\n")
-
-#------------------------------------------------------------------------------
-# If fitting the model to simulated data
-#------------------------------------------------------------------------------
-
-# Load in data
-#------------------------------------------------------------------------------
-
-scen = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality_stan_data", "Simulated_data_noseasonality_stan_data")
-scen_df = ifelse(scenario=="Two_step_spline_seasonality", "Simulated_data_seasonality", "Simulated_data_noseasonality")
-
-sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
-sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
-
-# When run locally
-#sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
-#sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
 
 # Set up spline basis
 #------------------------------------------------------------------------------
@@ -95,55 +87,66 @@ spline_degree <- 3
 num_basis <- num_knots + spline_degree 
 
 
-# Transform data to stan format
+#------------------------------------------------------------------------------
+# Load in data
 #------------------------------------------------------------------------------
 
-idx_middle_sim = sim_stan_data[["idx_middle_sim"]]
-
-stan_data_fit <- list(
-  N = nrow(sim_df),
-  N_persons = length(unique(sim_df$MenagememberID)),
-  H = length(unique(sim_df$HouseID)),
-  HouseID = sim_df$HouseID,
-  menage_id_member = sim_df$MenagememberID,
-  age = sim_df$Age,
-  round = sim_df$Round,
-  sexe = sim_df$Sexe,
-  observed_state = sim_df$Observed_State_Sim,
-  date_use = sim_df$date_use_num,
-  intervention = sim_df$Intervention,
-  intervention_date = sim_stan_data$intervention_date,
-  intervention_date2 = sim_stan_data$intervention_date2,
-  global_interval_start = sim_stan_data$global_interval_start,
-  global_interval_end = sim_stan_data$global_interval_end,
-  interval_length = sim_stan_data$interval_length,
-  num_data = length(sim_stan_data$X),
-  X = sim_stan_data$X,
-  max_middle = sim_stan_data$max_middle,
-  num_intervals = sim_stan_data$num_data,
-  idx_first_sim = sim_df$Idx_First_Sim,
-  idx_last_sim = sim_df$Idx_Last_Sim,
-  idx_middle_sim = idx_middle_sim,
-  first_subinterval_sim = sim_df$First_Subinterval_Sim,
-  last_subinterval_sim = sim_df$Last_Subinterval_Sim,
-  num_middle_subintervals_sim = sim_df$Num_Middle_Subintervals_Sim,
-  global_interval_index_start = sim_df$Global_Interval_Index_Start,
-  num_knots = num_knots,
-  knots = knots,
-  spline_degree = spline_degree,
-  num_basis = num_basis
-)
+if (data_source == "simulated") {
+  scen = ifelse(scenario=="Two_step_spline_seasonality",
+                "Simulated_data_seasonality_stan_data",
+                "Simulated_data_noseasonality_stan_data")
+  scen_df = ifelse(scenario=="Two_step_spline_seasonality",
+                   "Simulated_data_seasonality",
+                   "Simulated_data_noseasonality")
+  
+  sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
+  sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
+  
+  # When run locally
+  #sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
+  #sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
+  
+  stan_data_fit <- list(
+    N = nrow(sim_df),
+    N_persons = length(unique(sim_df$MenagememberID)),
+    H = length(unique(sim_df$HouseID)),
+    HouseID = sim_df$HouseID,
+    menage_id_member = sim_df$MenagememberID,
+    age = sim_df$Age,
+    round = sim_df$Round,
+    sexe = sim_df$Sexe,
+    observed_state = sim_df$Observed_State_Sim,
+    date_use = sim_df$date_use_num,
+    intervention = sim_df$Intervention,
+    intervention_date = sim_stan_data$intervention_date,
+    intervention_date2 = sim_stan_data$intervention_date2,
+    global_interval_start = sim_stan_data$global_interval_start,
+    global_interval_end = sim_stan_data$global_interval_end,
+    interval_length = sim_stan_data$interval_length,
+    num_data = length(sim_stan_data$X),
+    X = sim_stan_data$X,
+    max_middle = sim_stan_data$max_middle,
+    num_intervals = sim_stan_data$num_data,
+    idx_first_sim = sim_df$Idx_First_Sim,
+    idx_last_sim = sim_df$Idx_Last_Sim,
+    idx_middle_sim = sim_stan_data[["idx_middle_sim"]],
+    first_subinterval_sim = sim_df$First_Subinterval_Sim,
+    last_subinterval_sim = sim_df$Last_Subinterval_Sim,
+    num_middle_subintervals_sim = sim_df$Num_Middle_Subintervals_Sim,
+    global_interval_index_start = sim_df$Global_Interval_Index_Start,
+    num_knots = num_knots,
+    knots = knots,
+    spline_degree = spline_degree,
+    num_basis = num_basis
+  )
+  
+} else if (data_source == "observed") {
+  stan_data_fit <- readRDS("./CABU_EICO/data/Observed_data/bf_stan_data_all.rds")
+  # If run locally
+  #stan_data_fit <- readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
+}
 
 names(stan_data_fit)
-
-#----------------------------------------------------------------------------
-# If fitting the model to observed data cancel the below out
-#----------------------------------------------------------------------------
-
-# Load in data
-#----------------------------------------------------------------------------
-
-#stan_data_fit = readRDS("./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
 
 #---------------------------------------------------------------------------
 # Stan model code
@@ -1173,7 +1176,7 @@ stan_fit <- sampling(
 # Save output 
 #---------------------------------------------------------------------------
 
-saveRDS(stan_fit, file = paste0(output_dir,scenario, ".rds"))
+saveRDS(stan_fit, file = paste0(output_dir,scenario,data_source, ".rds"))
 
 print(summary(stan_fit)$summary)
 

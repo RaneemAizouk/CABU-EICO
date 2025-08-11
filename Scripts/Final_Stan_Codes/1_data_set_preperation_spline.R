@@ -1,17 +1,13 @@
+####################################################################################
+# THIS CODE CONVERTS THE OBSERVED DATA IN THE CABU EICO STUDY TO A STAN DATA FORMAT
+####################################################################################
+
+
 # Clear environment
 rm(list = ls())
 
-#####Library loading 
-
-library(ggplot2)
-library(rstan)
-library(tidyr)  
-library(bayesplot)
-library(gridExtra)
-library(dplyr)
-library(GGally) 
-library(lubridate)
-library(readr)
+# Libraries 
+pacman::p_load(ggplot2, rstan, tidyr, bayesplot, gridExtra, dplyr, GGally, lubridate, readr)
 
 #----------------------------------------------------------------------
 # load dataset
@@ -177,7 +173,7 @@ table(data_complete$menage_id_member) %>%
 
 # Impute missing Round 1 using population prevalence
 
-# 1) Who needs Round 1?
+# Who needs Round 1?
 ids_missing_r1 <- data_complete %>%
   group_by(menage_id_member) %>%
   summarise(has_r1 = any(round == 1L), .groups = "drop") %>%
@@ -323,8 +319,8 @@ print(knots)
 print(num_basis) # 7
 
 
-##########
-# Intervention Date Integration
+#----------------------------------------------------------------------
+# Add intervention date 
 #----------------------------------------------------------------------
 
 # Clean and prepare timing_interventions
@@ -646,8 +642,9 @@ for (i in seq_len(n_check)) {
   }
 }
 
+write.csv(diagnostic_table, "./Data/BF/clean/use_in_analyses/bf_check_stan_data.csv")
 
-print(diagnostic_table)
+print(diagnostic_table[c(1:20),])
 
 
 #------------------------------------------------------
@@ -705,4 +702,4 @@ str(stan_data)
 #-------------------------------------------------------------
 
 saveRDS(stan_data, file="./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
-
+write.csv(data_complete, file = "./Data/BF/clean/use_in_analyses/bf_df_model_all.csv")

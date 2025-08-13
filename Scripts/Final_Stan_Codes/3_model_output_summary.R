@@ -480,7 +480,7 @@ sumdf <- sumdf %>%
   dplyr::mutate(truth = dplyr::if_else(variable %in% names(truth_named),
                                        truth_named[variable], NA_real_))
 
-# which params you consider "seasonal"
+# which params considered "seasonal" parameters (for plotting them seperately from other parameters)
 season_params <- c("a_1_2[1]","a_1_2[2]","a_1_2[3]","a_1_2[4]","a_1_2[5]","a_1_2[6]","a_1_2[7]","a_1_2[8]",
                    "a_raw_1_2[1]","a_raw_1_2[2]","a_raw_1_2[3]","a_raw_1_2[4]","a_raw_1_2[5]","a_raw_1_2[6]","a_raw_1_2[7]","a_raw_1_2[8]",
                    "a_raw_1_2_free[1]","a_raw_1_2_free[2]","a_raw_1_2_free[3]","a_raw_1_2_free[4]","a_raw_1_2_free[5]","a_raw_1_2_free[6]","a_raw_1_2_free[7]","a_raw_1_2_free[8]",

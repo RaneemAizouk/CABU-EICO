@@ -11,20 +11,22 @@ rm(list=ls())
 #------------------------------------------------------------------------------
 # Load packages
 #------------------------------------------------------------------------------
-pacman::p_load(posterior, bayesplot, dplyr, shinystan, ggplot2, tibble, tidyr, lubridate, gridExtra)
+pacman::p_load(posterior, bayesplot, dplyr, shinystan, ggplot2, tibble, tidyr, lubridate, gridExtra,grid, 
+               rstan, loo, flextable)
 
 #------------------------------------------------------------------------------
 # Load data & fit
 #------------------------------------------------------------------------------
-data_source <- "observed"  # "simulated" or "observed"
+data_source <- "simulated"  # "simulated" or "observed"
 intervention <- "Two_step_" #"Two_step_" or "One_step"
 scen    <- "seasonality" # "seasonality" or "noseasonality"
-seasonality <- "spline_" # "sine_" or "spline_"
+seasonality <- "sine_" # "sine_" or "spline_"
+intervention_effect <- "" # "" or "NonAdd_" or "NonAdd_NonCol_" 
 
 scenario = paste0(intervention, seasonality, scen)
   
 if (data_source == "simulated") {
-  scen_data <- paste0("Simulated_data_", ifelse(scenario == paste0("Two_step_", seasonality, "seasonality"), "seasonality", "noseasonality"))
+  scen_data <- paste0("Simulated_data_", ifelse(scenario == paste0("Two_step_", seasonality,intervention_effect, "seasonality"), "seasonality", "noseasonality"))
   stan_data_fit <- readRDS(paste0("./Data/Simulated_data/", scen_data, "_stan_data.rds"))
   sim_df        <- readRDS(paste0("./Data/Simulated_data/", scen_data, ".rds"))
   data_fit      <- sim_df
@@ -46,7 +48,8 @@ num_basis <- num_knots + spline_degree
 
 
 dir = ifelse(data_source=="simulated", "Simulated_data/","Observed_data/")
-fit <- readRDS(paste0("./Output/Model_results/", dir,scenario, data_source,".rds"))
+fit <- readRDS(paste0("./Output/Model_results/", dir,intervention, seasonality, intervention_effect, scen, data_source,".rds"))
+
 
 #------------------------------------------------------------------------------
 # Traceplots & ShinyStan
@@ -69,9 +72,140 @@ trace_pars
 p = rstan::traceplot(fit, pars = trace_pars, inc_warmup = FALSE, nrow = 3)
 p
 
+# # Divergences
+# sp <- get_sampler_params(fit, inc_warmup = FALSE)
+# # Count divergences per chain
+# sapply(sp, function(x) sum(x[, "divergent__"] > 0))
+# 
+# # Total divergences
+# sum(sapply(sp, function(x) sum(x[, "divergent__"] > 0)))
+
 #y_rep = fit@par_dims$y_rep
 
 #launch_shinystan(fit)
+
+# Function to run diagnostics
+# NUTS stats table (like Shiny) 
+nuts_stats_table_stanfit <- function(fit, stat = c("Mean","SD","Max","Min"),
+                                     inc_warmup = FALSE, digits = 4,
+                                     log_lik_param = "log_lik") {
+  stopifnot(inherits(fit, "stanfit"))
+  stat <- match.arg(stat)
+  
+  # --- sampler diagnostics (like Shiny) ---
+  L <- rstan::get_sampler_params(fit, inc_warmup = inc_warmup)  # list per chain
+  cols_base <- c("accept_stat__", "stepsize__", "treedepth__", "n_leapfrog__", "energy__")
+  has_div <- "divergent__" %in% colnames(L[[1]])
+  
+  aggfun <- switch(stat,
+                   Mean = function(v) mean(v, na.rm = TRUE),
+                   SD   = function(v) sd(v,   na.rm = TRUE),
+                   Max  = function(v) max(v,  na.rm = TRUE),
+                   Min  = function(v) min(v,  na.rm = TRUE)
+  )
+  
+  # Per-chain table (base stats)
+  per_chain_base <- lapply(seq_along(L), function(i) {
+    x <- L[[i]][, intersect(cols_base, colnames(L[[i]])), drop = FALSE]
+    out <- as.data.frame(lapply(as.data.frame(x), aggfun))
+    names(out) <- sub("__$", "", names(out))
+    cbind(chain = paste0("chain", i), out, row.names = NULL)
+  })
+  tab <- do.call(rbind, per_chain_base)
+  
+  # Per-chain divergences (count & %)
+  if (has_div) {
+    n_div_chain   <- sapply(L, function(m) sum(m[, "divergent__"] > 0))
+    iters_chain   <- sapply(L, nrow)
+    pct_div_chain <- 100 * n_div_chain / iters_chain
+    tab$n_divergent   <- n_div_chain
+    tab$pct_divergent <- pct_div_chain
+  } else {
+    tab$n_divergent <- NA_integer_
+    tab$pct_divergent <- NA_real_
+  }
+  
+  # "All chains" row
+  S <- do.call(rbind, L)
+  all_mat <- S[, intersect(cols_base, colnames(S)), drop = FALSE]
+  all_row <- as.data.frame(lapply(as.data.frame(all_mat), aggfun))
+  names(all_row) <- sub("__$", "", names(all_row))
+  if (has_div) {
+    n_div_total   <- sum(S[, "divergent__"] > 0)
+    iters_total   <- nrow(S)
+    pct_div_total <- 100 * n_div_total / iters_total
+  } else {
+    n_div_total <- NA_integer_; pct_div_total <- NA_real_
+  }
+  
+  # --- R-hat min/max (exclude lp__) ---
+  sm <- rstan::summary(fit)$summary
+  if ("lp__" %in% rownames(sm)) sm <- sm[setdiff(rownames(sm), "lp__"), , drop = FALSE]
+  rhat_min <- suppressWarnings(min(sm[, "Rhat"], na.rm = TRUE))
+  rhat_max <- suppressWarnings(max(sm[, "Rhat"], na.rm = TRUE))
+  
+  # --- LOO stats ---
+  ll <- tryCatch(
+    loo::extract_log_lik(fit, parameter_name = log_lik_param, merge_chains = FALSE),
+    error = function(e) NULL
+  )
+  loo_obj <- if (!is.null(ll)) tryCatch(loo::loo(ll), error = function(e) NULL) else NULL
+  
+  loo_fields <- list(
+    Rhat_min = rhat_min, Rhat_max = rhat_max,
+    elpd_loo = NA_real_, se_elpd_loo = NA_real_,
+    LOOIC = NA_real_, se_LOOIC = NA_real_,
+    p_loo = NA_real_, se_p_loo = NA_real_,
+    pareto_k_max = NA_real_, pareto_k_gt_0.5 = NA_integer_,
+    pareto_k_gt_0.7 = NA_integer_, n_points = NA_integer_
+  )
+  if (!is.null(loo_obj)) {
+    est <- loo_obj$estimates
+    k   <- loo_obj$diagnostics$pareto_k
+    elpd <- est["elpd_loo","Estimate"]; se_e <- est["elpd_loo","SE"]
+    ploo <- est["p_loo","Estimate"];    se_p <- est["p_loo","SE"]
+    
+    loo_fields$elpd_loo <- elpd
+    loo_fields$se_elpd_loo <- se_e
+    loo_fields$LOOIC <- -2 * elpd
+    loo_fields$se_LOOIC <- 2 * se_e
+    loo_fields$p_loo <- ploo
+    loo_fields$se_p_loo <- se_p
+    loo_fields$pareto_k_max <- max(k, na.rm = TRUE)
+    loo_fields$pareto_k_gt_0.5 <- sum(k > 0.5, na.rm = TRUE)
+    loo_fields$pareto_k_gt_0.7 <- sum(k > 0.7, na.rm = TRUE)
+    loo_fields$n_points <- length(k)
+  }
+  
+  # Bind: LOO/Rhat + total divergence only on "All chains" row
+  all_out <- cbind(
+    chain = "All chains",
+    all_row,
+    n_divergent   = n_div_total,
+    pct_divergent = pct_div_total,
+    as.data.frame(loo_fields)
+  )
+  
+  per_chain_out <- cbind(tab, as.data.frame(lapply(loo_fields, function(x) NA)))
+  out <- rbind(all_out, per_chain_out)
+  
+  # Round nicely
+  is_num <- vapply(out, is.numeric, TRUE)
+  out[is_num] <- lapply(out[is_num], function(x) ifelse(is.finite(x), round(x, digits), x))
+  rownames(out) <- NULL
+  out
+}
+diagnostics <- nuts_stats_table_stanfit(fit, stat = "Mean", log_lik_param = "log_lik")
+
+ft <- flextable(diagnostics[,c(1:8)])
+ft <- autofit(ft)
+ft <- set_caption(ft, "NUTS sampler diagnostics")
+ft
+
+ft_f <- flextable(diagnostics[1,c(9:20)])
+ft_f <- autofit(ft_f)
+ft_f <- set_caption(ft_f, "LOO statistics")
+ft_f
 
 D <- posterior::as_draws_df(fit)
 
@@ -202,20 +336,40 @@ if (trimws(seasonality) == "spline_") {
 } else {
 # For sine seasonality
 #-------------------------------------------------------------------------------
-  # Phase grid (avoid t = 1 right-open boundary) 
   phase_grid <- seq(0, 1, length.out = 400)
   
   # expects a1, phi in `fit
   s <- D[, c("a1","phi")]
-  #s <- as_draws_df(fit, variables = c("a1","phi"))
-  Y_sine <- outer(2*pi*phase_grid, rep(1, nrow(s)))  # angle per phase
+  
+  # Build the sine at each phase for all draws: a1 * sin(2*pi*phase + phi)
+  angle <- outer(2*pi*phase_grid, rep(1, nrow(s)))  # (len_phase x draws)
   
   # Each draw: a1*sin(2*pi*x + phi)
-  sine_mat <- sweep(sin(Y_sine + matrix(rep(s$phi, each = length(phase_grid)),
-                                      nrow = length(phase_grid))), 2, s$a1, `*`)
+  sine_mat <- sweep(
+    sin(angle + matrix(rep(s$phi, each = length(phase_grid)),
+                       nrow = length(phase_grid))),
+    2, s$a1, `*`
+  )
+  
+  # Summarise across draws at each phase
   sine_df <- bind_cols(tibble(phase = phase_grid),
-                     summarise_draws(t(sine_mat))) |>
-  mutate(Date = phase_to_date(phase, cal$date0))
+                       summarise_draws(t(sine_mat)))
+  
+  # Calendar anchor for plotting (Jan 1 of your chosen year)
+  jan1 <- cal$date0  # you set this in make_calendar(...), e.g., as.Date("2023-01-01")
+  
+  # Origin used in the model to build phase (adjust if you used the FIRST MIDPOINT instead)
+  # model_phase_origin <- as.Date(X_midpoints[1], origin = "1970-01-01")  # <- if using Stan origin start (i.e. start of study)
+  model_phase_origin <- global_interval_start_numeric  # <- common case
+  
+  # Rotate by the difference between the model origin and Jan 1 (fraction of a year)
+  phase_shift <- ((as.numeric(model_phase_origin) - as.numeric(jan1)) %% 365) / 365
+  
+  # Map to calendar dates using the rotated phase; sort so axis runs Jan→Dec
+  sine_df <- sine_df |>
+    mutate(phase_rot = (phase + phase_shift) %% 1,
+           Date = jan1 + round(phase_rot * 365)) |>
+    arrange(Date)
   
   p_season <- plot_phase_curve(sine_df, "Seasonal effect (λ12)", 
                            "Sinusoidal seasonal pattern (median & CrI)")
@@ -302,7 +456,9 @@ lambda_week <- df_all %>%
   mutate(
     Rate = factor(Rate,
                   levels = c("Mean_lambda_1_2", "Mean_lambda_2_1"),
-                  labels = c("Acquisition rate (λ12)", "Decolonisation rate (λ21)"))
+                  labels = c("Acquisition rate (λ12)", "Decolonisation rate (λ21)")),
+    round = factor(round, levels = c(1,2,3,4), labels = c("3-months\npre-intervention", "start intervention",
+                                                          "3-months\npost-intervention", "9-months\npost-intervention"))
   )
 
 lambda_summary_stats <- df_all %>%
@@ -318,31 +474,63 @@ lambda_summary_stats <- df_all %>%
                              quantile(lambda_2_1, 0.75, na.rm = TRUE)),
     .groups = "drop"
   ) %>%
-  arrange(Time_Period, round)
+  arrange(Time_Period, round) #%>%
+  #mutate(
+  #  round = factor(round, levels = c(1,2,3,4), labels = c("3-months\npre-intervention", "start intervention",
+  #                                                        "3-months\npost-intervention", "9-months\npre-intervention"))
+  #)
 
-grid.table(lambda_summary_stats)
+lambda_summary_stats2 <- df_all %>%
+  group_by(Time_Period) %>%
+  summarise(
+    Acquisition    = sprintf("%.3f (%.3f–%.3f)",
+                             median(lambda_1_2, na.rm = TRUE),
+                             quantile(lambda_1_2, 0.25, na.rm = TRUE),
+                             quantile(lambda_1_2, 0.75, na.rm = TRUE)),
+    Decolonisation = sprintf("%.3f (%.3f–%.3f)",
+                             median(lambda_2_1, na.rm = TRUE),
+                             quantile(lambda_2_1, 0.25, na.rm = TRUE),
+                             quantile(lambda_2_1, 0.75, na.rm = TRUE)),
+    .groups = "drop"
+  ) %>%
+  arrange(Time_Period)
+
+ft2 = flextable(lambda_summary_stats)
+ft2 = autofit(ft2)
+ft2 = set_caption(ft2, "Model estimates for acquisition and decolonisation - per round")
+ft2
+
+ft3 = flextable(lambda_summary_stats2)
+ft3 = autofit(ft3)
+ft3 = set_caption(ft3, "Model estimates for acquisition and decolonisation - per intervention period")
+ft3
 
 # plot acquisition & decolonisation by time period 
 p_period <- ggplot(lambda_week, aes(x = Time_Period, y = Mean, fill = Time_Period)) +
   geom_boxplot(outlier.shape = NA, width = 0.7) +
   facet_wrap(~ Rate, scales = "free_y") +
   labs(title = "Weekly mean rates by intervention period",
-       x = "Time Period", y = "Rate (per day)") +
+       x = "Time Period", y = expression(lambda ~ "(per day)")) +
   theme_minimal() +
   theme(legend.position = "bottom",
         axis.text.x = element_text(angle = 90, hjust = 1))+
   scale_fill_brewer(palette="Set1")
 p_period
 
-p_round <- ggplot(lambda_week, aes(x = factor(round), y = Mean, fill =Intervention)) +
+p_round <- ggplot(lambda_week, aes(x = factor(round), y = Mean, fill = Intervention)) +
   geom_boxplot(outlier.shape = NA, width = 0.7) +
-  facet_wrap( ~ Rate, scales = "free_y") +
-  labs(title = "Weekly mean rates by sample period",
-       x = "Round", y = "Rate (per day)") +
+  facet_wrap(~ Rate, scales = "free_y") +
+  labs(
+    title = "Intervention effect (intention to treat)",
+    subtitle = expression("Daily transition rate — weekly average (" * lambda * ")"),
+    y =  expression(lambda ~ "(per day)"),
+    x = "")+
   theme_minimal() +
-  theme(legend.position = "bottom",
-        axis.text.x = element_text(angle = 0, hjust = 1))+
-  scale_fill_brewer(palette="Set1")
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5)  # centered
+  ) +
+  scale_fill_brewer(palette = "Set1")
 p_round
 
 # Yhat
@@ -514,14 +702,27 @@ p_cat
 # STORE OUTPUT
 #-------------------------------------------------------------------------------------------------------------
 
+pdf(file = paste0("./Output/Figures/", dir,"m_output_", intervention, seasonality, intervention_effect, scen, "_",data_source,".pdf"), width = 15, height = 8)
 
-pdf(file = paste0("./Output/Figures/", dir,"m_output_", scenario,"_", data_source,".pdf"), width = 15, height = 8)
+grid.newpage()
+grid.table(diagnostics[,c(1:8)])
+
+grid.newpage()
+grid.table(diagnostics[1,c(9:20)])
+
+print(p)
+
+grid.newpage()
+grid.table(lambda_summary_stats)
+
+grid.newpage()
+grid.table(lambda_summary_stats2)
 
 # Loop over a list of plots
-grid.table(lambda_summary_stats)
-plots <- list(p, p_period,p_round,p_season, p_mid,p_step, p_cat)
+plots <- list(p_period,p_round,p_season, p_mid,p_step, p_cat)
 for (plt in plots) {
   print(plt)
 }
 
 dev.off()
+

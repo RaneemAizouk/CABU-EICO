@@ -9,7 +9,7 @@
 # ------------------------------------------------------------------------------
 
 # Date created: 1 July 2025
-# Date last updated: 1 August 2025
+# Date last updated: 13 August 2025
 # Author: Raneem Aizouk
 
 rm(list=ls())
@@ -464,7 +464,7 @@ model {
           // --- Post-intervention 1
           //----------------------------------------------------------------------------------------------------------
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -479,7 +479,7 @@ model {
           // --- Pre-intervention 2 (intervention 1 only)
           //----------------------------------------------------------------------------------------------------------
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -487,8 +487,8 @@ model {
           
          // --- Post-intervention 2
          //----------------------------------------------------------------------------------------------------------
-          log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12 + beta_int1_2;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -502,13 +502,13 @@ model {
           // Case 3a: Interval lies fully within post-intervention 2
           //----------------------------------------------------------------------------------------------------------
           if (midpoint >= t_star2 && intervention[n] == 1) {
-            log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
-            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            log_lambda_1_2 = log12_base + s12 + beta_int1_2;
+            log_lambda_2_1 = log21_base;
           // Case 3b: Interval lies fully within post-intervention 1
           //----------------------------------------------------------------------------------------------------------
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-            log_lambda_2_1 = log21_base + beta_int2_1;
+            log_lambda_2_1 = log21_base;
          // Case 3c: Interval is fully pre-intervention
          //---------------------------------------------------------------------------------------------------------
           } else {
@@ -553,7 +553,7 @@ model {
           // Post-intervention 1 and pre-intervention 2
           //----------------------------------------------------------------------------------------------------------
           log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -568,7 +568,7 @@ model {
           // Pre-intervention 2
           //----------------------------------------------------------------------------------------------------------
           log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -576,8 +576,8 @@ model {
           
           // Post-intervention 2
           //----------------------------------------------------------------------------------------------------------
-          log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12m + beta_int1_2;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -591,13 +591,13 @@ model {
           // Case 3a: Full interval during intervention 2
           //----------------------------------------------------------------------------------------------------------
           if (midpoint >= t_star2 && intervention[n] == 1) {
-            log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            log_lambda_1_2 = log12_base + s12m + beta_int1_2;
+            log_lambda_2_1 = log21_base;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Full interval during intervention 1
             //----------------------------------------------------------------------------------------------------------
             log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-            log_lambda_2_1 = log21_base + beta_int2_1;
+            log_lambda_2_1 = log21_base;
           } else {
             // Case 3c: Full interval pre-intervention
             //----------------------------------------------------------------------------------------------------------
@@ -642,7 +642,7 @@ model {
           // Post-intervention 1
           //----------------------------------------------------------------------------------------------------------
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -657,7 +657,7 @@ model {
           // Pre-intervention 2 (intervention 1 only)
           //----------------------------------------------------------------------------------------------------------
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -665,8 +665,8 @@ model {
           
           // Post-intervention 2 (intervention 1 + 2)
           //----------------------------------------------------------------------------------------------------------
-          log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12l + beta_int1_2;
+          log_lambda_2_1 = log21_base;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -680,14 +680,14 @@ model {
           // Case 3a: Entire interval after intervention 2
           //----------------------------------------------------------------------------------------------------------
           if (midpoint >= t_star2 && intervention[n] == 1) {
-            log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+            log_lambda_1_2 = log12_base + s12l + beta_int1_2;
+            log_lambda_2_1 = log21_base;
             
           // Case 3b: Entire interval after intervention 1 but before intervention 2
           //----------------------------------------------------------------------------------------------------------
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-            log_lambda_2_1 = log21_base + beta_int2_1;
+            log_lambda_2_1 = log21_base;
             
           // Case 3c: Entire interval before any intervention
           //----------------------------------------------------------------------------------------------------------
@@ -746,12 +746,12 @@ generated quantities {
       real s12 = Y_hat_1_2_out[i0];
       real midpoint = date_use[n];
       if (midpoint >= t_star2 && intervention[n] == 1) {
-        log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
-        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12 + beta_int1_2;
+        log_lambda_2_1 = log21_base;
         second_intervention_used[n] = 1;
       } else if (midpoint >= t_star1 && intervention[n] == 1) {
         log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         second_intervention_used[n] = 0;
       } else {
         log_lambda_1_2 = log12_base + s12;
@@ -804,7 +804,7 @@ generated quantities {
         //----------------------------------------------------------------------------------------------------------
 
         log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -827,7 +827,7 @@ generated quantities {
         // Pre-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -840,8 +840,8 @@ generated quantities {
         }
         // Post-intervention 2
         //----------------------------------------------------------------------------------------------------------
-        log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
-        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12 + beta_int1_2;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -863,15 +863,15 @@ generated quantities {
         // Case 3a: Entire interval after intervention 2
         //----------------------------------------------------------------------------------------------------------
         if (midpoint >= t_star2 && intervention[n] == 1) {
-          log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12 + beta_int1_2;
+          log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 1;
           
         // Case 3b: Entire interval after intervention 1 but before intervention 2
         //----------------------------------------------------------------------------------------------------------
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 0;
           
         // Case 3c: Entire interval before any intervention
@@ -927,7 +927,7 @@ generated quantities {
         // Post-intervention 1
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -949,7 +949,7 @@ generated quantities {
         // Pre-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -962,8 +962,8 @@ generated quantities {
         }
         // Post-intervention 2
         //----------------------------------------------------------------------------------------------------------
-        log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12m + beta_int1_2;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -985,15 +985,15 @@ generated quantities {
         // Case 3a: Entire interval after intervention 2
         //----------------------------------------------------------------------------------------------------------
         if (midpoint >= t_star2 && intervention[n] == 1) {
-          log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12m + beta_int1_2;
+          log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 1;
           
           // Case 3b: Entire interval after intervention 1 but before intervention 2
           //----------------------------------------------------------------------------------------------------------
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 0;
           
           // Case 3c: Entire interval before any intervention
@@ -1050,7 +1050,7 @@ generated quantities {
         // Post-intervention 1
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -1073,7 +1073,7 @@ generated quantities {
         // Pre-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-        log_lambda_2_1 = log21_base + beta_int2_1;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -1086,8 +1086,8 @@ generated quantities {
         }
         // Post-intervention 2
         //----------------------------------------------------------------------------------------------------------
-        log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12l + beta_int1_2;
+        log_lambda_2_1 = log21_base;
         {
           matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
           int next_state = categorical_rng(to_vector(P[current_state]) / sum(P[current_state]));
@@ -1109,15 +1109,15 @@ generated quantities {
         // Case 3a: Entire interval after intervention 2
         //----------------------------------------------------------------------------------------------------------
         if (midpoint >= t_star2 && intervention[n] == 1) {
-          log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12l + beta_int1_2;
+          log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 1;
           
         // Case 3b: Entire interval after intervention 1 and before intervention 2
         //----------------------------------------------------------------------------------------------------------
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-          log_lambda_2_1 = log21_base + beta_int2_1;
+          log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 0;
           
         // Case 3c: Entire interval before any intervention
@@ -1142,7 +1142,6 @@ generated quantities {
 
     // Final simulated state for this observation
     y_rep[n] = current_state;
-
     log_lambda_1_2_out[n] = log_lambda_1_2;
     log_lambda_2_1_out[n] = log_lambda_2_1;
     total_subinterval_duration[n] = first_subinterval[n] + middle_subinterval[n] + last_subinterval[n];
@@ -1158,7 +1157,7 @@ keep_pars <- c(
   "a_1_2", "a_raw_1_2_free","a_raw_1_2", "log_tau_raw_1_2", 
   "q_1_2_raw","q_2_1_raw",
   "beta_1_2_age","beta_2_1_age","beta_1_2_sexe","beta_2_1_sexe",
-  "beta_int1_1","beta_int1_2","beta_int2_1","beta_int2_2",
+  "beta_int1_1","beta_int1_2",
   "sigma","sigma_u","sigma_q_1_2","sigma_q_2_1","Y_hat_1_2_out",
   "log_lambda_1_2_out","log_lambda_2_1_out", "y_rep"
 )

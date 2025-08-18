@@ -689,10 +689,9 @@ generated quantities {
           second_intervention_used[n] = 0;
         }
       }
-      log_lambda_1_2_out[n] = log_lambda_1_2; // Use the last subinterval rate
-      log_lambda_2_1_out[n] = log_lambda_2_1;
+    log_lambda_1_2_out[n] = log_lambda_1_2; // Use the last subinterval rate
+    log_lambda_2_1_out[n] = log_lambda_2_1;
     }
-    
     // Total subinterval duration
     total_subinterval_duration[n] = first_subinterval[n] + middle_subinterval[n] + last_subinterval[n];
   }

@@ -8,8 +8,8 @@
 # MODEL FITTING: Seasonality with spline
 # ------------------------------------------------------------------------------
 # Date created: 1 July 2025
-# Date last updated: 1 August 2025
-# Author: Raneem Aizouk
+# Date last updated: 16 August 2025
+# Author: Raneem Aizouk; Esther van Kleef
 
 rm(list=ls())
 
@@ -356,8 +356,8 @@ model {
           }
           
           // Post-intervention 2
-          log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
+          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -367,8 +367,8 @@ model {
           
           // Case 3a: Interval lies fully within post-intervention 2
           if (midpoint >= t_star2 && intervention[n] == 1) {
-            log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-            log_lambda_2_1 = log21_base + beta_int2_2;
+            log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Interval lies fully within post-intervention 1
             log_lambda_1_2 = log12_base + s12 + beta_int1_1;
@@ -426,8 +426,8 @@ model {
           }
           
           // Post-intervention 2
-          log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -437,8 +437,8 @@ model {
           
           // Case 3a: Full interval during intervention 2
           if (midpoint >= t_star2 && intervention[n] == 1) {
-            log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-            log_lambda_2_1 = log21_base + beta_int2_2;
+            log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Full interval during intervention 1
             log_lambda_1_2 = log12_base + s12m + beta_int1_1;
@@ -496,8 +496,8 @@ model {
           }
           
           // Post-intervention 2 (intervention 1 + 2)
-          log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -507,8 +507,8 @@ model {
           
           // Case 3a: Entire interval after intervention 2
           if (midpoint >= t_star2 && intervention[n] == 1) {
-            log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-            log_lambda_2_1 = log21_base + beta_int2_2;
+            log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+            log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Entire interval after intervention 1 but before intervention 2
             log_lambda_1_2 = log12_base + s12l + beta_int1_1;
@@ -558,8 +558,8 @@ generated quantities {
       real s12 = Y_hat_1_2_out[i0];
       real midpoint = date_use[n]; // Use observation time as midpoint for single observation
       if (midpoint >= t_star2 && intervention[n] == 1) {
-        log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-        log_lambda_2_1 = log21_base + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
+        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
         second_intervention_used[n] = 1;
       } else if (midpoint >= t_star1 && intervention[n] == 1) {
         log_lambda_1_2 = log12_base + s12 + beta_int1_1;
@@ -592,14 +592,14 @@ generated quantities {
       } else if (t0 < t_star2 && t_star2 < t1 && intervention[n] == 1) {
         real d1a = t_star2 - t0;
         real d1b = t1 - t_star2 + 1;
-        log_lambda_1_2 = log12_base + s12 + beta_int1_2; // Use post-intervention 2 rate
-        log_lambda_2_1 = log21_base + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2; // Use post-intervention 2 rate
+        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
         second_intervention_used[n] = 1;
       } else {
         real midpoint = (t0 + t1) / 2;
         if (midpoint >= t_star2 && intervention[n] == 1) {
-          log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12 + beta_int1_1 + beta_int1_2;
+          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           second_intervention_used[n] = 1;
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
@@ -631,14 +631,14 @@ generated quantities {
       } else if (t0m < t_star2 && t_star2 < t1m && intervention[n] == 1) {
         real d2a = t_star2 - t0m;
         real d2b = t1m - t_star2 + 1;
-        log_lambda_1_2 = log12_base + s12m + beta_int1_2; // Use post-intervention 2 rate
-        log_lambda_2_1 = log21_base + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2; // Use post-intervention 2 rate
+        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
         second_intervention_used[n] = 1;
       } else {
         real midpoint = (t0m + t1m) / 2;
         if (midpoint >= t_star2 && intervention[n] == 1) {
-          log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12m + beta_int1_1 + beta_int1_2;
+          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           second_intervention_used[n] = 1;
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12m + beta_int1_1;
@@ -670,14 +670,14 @@ generated quantities {
       } else if (t0l < t_star2 && t_star2 < t1l && intervention[n] == 1) {
         real d2a = t_star2 - t0l;
         real d2b = t1l - t_star2 + 1;
-        log_lambda_1_2 = log12_base + s12l + beta_int1_2; // Use post-intervention 2 rate
-        log_lambda_2_1 = log21_base + beta_int2_2;
+        log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2; // Use post-intervention 2 rate
+        log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
         second_intervention_used[n] = 1;
       } else {
         real midpoint = (t0l + t1l) / 2;
         if (midpoint >= t_star2 && intervention[n] == 1) {
-          log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-          log_lambda_2_1 = log21_base + beta_int2_2;
+          log_lambda_1_2 = log12_base + s12l + beta_int1_1 + beta_int1_2;
+          log_lambda_2_1 = log21_base + beta_int2_1 + beta_int2_2;
           second_intervention_used[n] = 1;
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
@@ -688,9 +688,9 @@ generated quantities {
           log_lambda_2_1 = log21_base;
           second_intervention_used[n] = 0;
         }
-   log_lambda_1_2_out[n] = log_lambda_1_2; // Use the last subinterval rate
-   log_lambda_2_1_out[n] = log_lambda_2_1;
       }
+      log_lambda_1_2_out[n] = log_lambda_1_2; // Use the last subinterval rate
+    log_lambda_2_1_out[n] = log_lambda_2_1;
     }
     // Total subinterval duration
     total_subinterval_duration[n] = first_subinterval[n] + middle_subinterval[n] + last_subinterval[n];

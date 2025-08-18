@@ -17,11 +17,11 @@ pacman::p_load(posterior, bayesplot, dplyr, shinystan, ggplot2, tibble, tidyr, l
 #------------------------------------------------------------------------------
 # Load data & fit
 #------------------------------------------------------------------------------
-data_source <- "simulated"  # "simulated" or "observed"
+data_source <- "observed"  # "simulated" or "observed"
 intervention <- "Two_step_" #"Two_step_" or "One_step"
 scen    <- "seasonality" # "seasonality" or "noseasonality"
 seasonality <- "sine_" # "sine_" or "spline_"
-intervention_effect <- "" # "" or "NonAdd_" or "NonAdd_NonCol_" 
+intervention_effect <- "NonAdd_NonCol_sep_RandomEffects_" # "" or "NonAdd_" or "NonAdd_NonCol_" or "NonAdd_NonCol_sep_RandomEffects"
 
 scenario = paste0(intervention, seasonality, scen)
   
@@ -61,10 +61,15 @@ if (trimws(seasonality) == "spline_") {
                   "beta_int1_1","beta_int1_2","beta_int2_1","beta_int2_2",
                   "sigma","sigma_u","sigma_q_1_2","sigma_q_2_1")
 } else { # for sine
-trace_pars <- c("a1","phi","q_1_2_raw","q_2_1_raw",
-                "beta_1_2_age","beta_2_1_age","beta_1_2_sexe","beta_2_1_sexe",
-                "beta_int1_1","beta_int1_2","beta_int2_1","beta_int2_2",
-                "sigma_u","sigma_q_1_2","sigma_q_2_1")
+# trace_pars <- c("a1","phi","q_1_2_raw","q_2_1_raw",
+#                 "beta_1_2_age","beta_2_1_age","beta_1_2_sexe","beta_2_1_sexe",
+#                 "beta_int1_1","beta_int1_2","beta_int2_1","beta_int2_2",
+#                 "sigma_u","sigma_q_1_2","sigma_q_2_1")
+  trace_pars <- c("a1","phi","q_1_2_raw","q_2_1_raw",
+                  "beta_1_2_age","beta_2_1_age","beta_1_2_sexe","beta_2_1_sexe",
+                  "beta_int1_1","beta_int1_2",
+                  "sigma_q_1_2","sigma_q_2_1",
+                  "sigma_u12","sigma_u21")
 }
 
 trace_pars
@@ -80,9 +85,6 @@ p
 # # Total divergences
 # sum(sapply(sp, function(x) sum(x[, "divergent__"] > 0)))
 
-#y_rep = fit@par_dims$y_rep
-
-#launch_shinystan(fit)
 
 # Function to run diagnostics
 # NUTS stats table (like Shiny) 
@@ -138,13 +140,13 @@ nuts_stats_table_stanfit <- function(fit, stat = c("Mean","SD","Max","Min"),
     n_div_total <- NA_integer_; pct_div_total <- NA_real_
   }
   
-  # --- R-hat min/max (exclude lp__) ---
+  # R-hat min/max (exclude lp__)
   sm <- rstan::summary(fit)$summary
   if ("lp__" %in% rownames(sm)) sm <- sm[setdiff(rownames(sm), "lp__"), , drop = FALSE]
   rhat_min <- suppressWarnings(min(sm[, "Rhat"], na.rm = TRUE))
   rhat_max <- suppressWarnings(max(sm[, "Rhat"], na.rm = TRUE))
   
-  # --- LOO stats ---
+  # LOO stats
   ll <- tryCatch(
     loo::extract_log_lik(fit, parameter_name = log_lik_param, merge_chains = FALSE),
     error = function(e) NULL
@@ -570,6 +572,7 @@ p_mid <- ggplot(yhat_linked, aes(mid_date, Y_hat_1_2_out_median)) +
        title = "Seasonal effect by 28-day intervals (median & 95% CrI)",
        subtitle = "Based on yhat") +
   theme_minimal() +
+  #ylim(-5,0.5)+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 p_mid
 
@@ -593,6 +596,7 @@ p_step = ggplot(df_step) +
        title = "Seasonal effect by 28-day interval (median with shaded 95% CrI)",
        subtitle = "Based on yhat") +
   theme_minimal() +
+  ylim(-5,0.5)+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
 p_step
 
@@ -702,7 +706,7 @@ p_cat
 # STORE OUTPUT
 #-------------------------------------------------------------------------------------------------------------
 
-pdf(file = paste0("./Output/Figures/", dir,"m_output_", intervention, seasonality, intervention_effect, scen, "_",data_source,".pdf"), width = 15, height = 8)
+pdf(file = paste0("./Output/Model_results/Model_summaries/", dir,"m_output_", intervention, seasonality, intervention_effect, scen, "_",data_source,".pdf"), width = 15, height = 8)
 
 grid.newpage()
 grid.table(diagnostics[,c(1:8)])
@@ -725,4 +729,230 @@ for (plt in plots) {
 }
 
 dev.off()
+
+#------------------------------------------------------------------------
+# Predicted vs observed
+#------------------------------------------------------------------------
+y_rep <- rstan::extract(fit, pars = "y_rep")$y_rep
+dim(y_rep)
+
+y_obs <- stan_data_fit$observed_state
+
+#launch_shinystan(fit)
+
+ppc_binary_suite <- function(y_obs, y_rep, t = NULL, ndraws_plot = 200, seed = 1) {
+  stopifnot(is.matrix(y_rep), length(y_obs) == ncol(y_rep))
+  
+  if (!requireNamespace("bayesplot", quietly = TRUE)) {
+    stop("Package 'bayesplot' is required. Install with install.packages('bayesplot').")
+  }
+  
+  # Handle coding (0/1 or 1/2) and coerce y_rep to draws x N integers
+  success_val <- if (any(y_obs == 2L)) 2L else 1L
+  y01 <- as.integer(y_obs == success_val)
+  
+  if (is.vector(y_rep)) y_rep <- matrix(y_rep, ncol = length(y_obs), byrow = TRUE)
+  y_rep01 <- matrix(as.integer(y_rep == success_val), nrow = nrow(y_rep))
+  
+  #   # Summaries (use ALL draws)
+  pr <- colMeans(y_rep01)
+  lo <- apply(y_rep01, 2, quantile, 0.025)
+  hi <- apply(y_rep01, 2, quantile, 0.975)
+  
+  message(sprintf("Overall Pr(Y=%d): observed = %.3f, predicted = %.3f",
+                  success_val, mean(y01), mean(pr)))
+  
+  # Discrete PPC bars (subset draws for clarity)
+  set.seed(seed)
+  ndraws_plot <- min(ndraws_plot, nrow(y_rep01))
+  draw_idx <- if (ndraws_plot < nrow(y_rep01)) sample(nrow(y_rep01), ndraws_plot) else seq_len(ndraws_plot)
+  bayesplot::ppc_bars(y = y01, yrep = y_rep01[draw_idx, , drop = FALSE])
+  
+  # Optional time series overlay
+  if (!is.null(t)) {
+    o <- order(t)
+    plot(t[o], pr[o], type = "l", ylim = c(0,1),
+         ylab = sprintf("Pr(Y=%d)", success_val), xlab = "Time")
+    lines(t[o], lo[o], lty = 3)
+    lines(t[o], hi[o], lty = 3)
+    points(t[o], y01[o], pch = 16, cex = 0.6, col = "red")
+  }
+  
+  # Calibration + scoring rules (robust to non-unique breaks)
+  rng <- range(pr, na.rm = TRUE)
+  if (!is.finite(rng[1]) || !is.finite(rng[2])) {
+    calib_df <- data.frame(mid = NA_real_, obs = NA_real_)
+  } else if (diff(rng) == 0) {
+    # Constant predictions: a single calibration point
+    calib_df <- data.frame(mid = mean(pr), obs = mean(y01))
+  } else {
+    # Start with quantile breaks; deduplicate; ensure at least 3 points
+    probs <- seq(0, 1, 0.1)
+    q <- quantile(pr, probs = probs, na.rm = TRUE, names = FALSE, type = 8)
+    br <- unique(as.numeric(q))
+    if (length(br) < 3) {
+      # Fall back to equal-width bins over the range (3 points -> 2 bins)
+      br <- seq(rng[1], rng[2], length.out = 3)
+      # Add a tiny epsilon in the pathological near-constant case
+      if (length(unique(br)) < 3) {
+        eps <- max(1e-12, diff(rng) / 1000)
+        br <- c(rng[1] - eps, rng[2] + eps)
+      }
+    }
+    # If still only 2 unique values, cut() will make 1 bin, which is fine
+    cuts <- cut(pr, breaks = br, include.lowest = TRUE, right = TRUE)
+    mids <- tapply(pr, cuts, mean)
+    obs  <- tapply(y01, cuts, mean)
+    calib_df <- data.frame(mid = as.numeric(mids), obs = as.numeric(obs))
+  }
+  
+  # Scores
+  eps <- 1e-12
+  pr_clip <- pmin(pmax(pr, eps), 1 - eps)
+  brier <- mean((pr - y01)^2)
+  logsc <- -mean(y01 * log(pr_clip) + (1 - y01) * log(1 - pr_clip))
+  
+  cat("\nScores:\n")
+  print(c(Brier = brier, LogScore = logsc))
+  
+  invisible(list(
+    success_val = success_val,
+    p = pr, lo = lo, hi = hi,
+    draws_used_for_plot = draw_idx,
+    calib = calib_df,
+    brier = brier, logscore = logsc
+  ))
+}
+
+ppc_binary_suite(y_obs, y_rep)
+
+# build a PPC meta object
+make_ppc_meta <- function(fit, meta, y_col, success_val = NULL) {
+  stopifnot(is.data.frame(meta), y_col %in% names(meta))
+  
+  # Extract posterior predictive draws
+  y_rep <- rstan::extract(fit, "y_rep")$y_rep   # draws x N
+  if (is.vector(y_rep)) y_rep <- matrix(y_rep, ncol = nrow(meta), byrow = TRUE)
+  stopifnot(ncol(y_rep) == nrow(meta))
+  
+  # Decide what "success" means (default: 2 if present, else 1)
+  y_obs <- meta[[y_col]]
+  if (is.null(success_val)) success_val <- if (any(y_obs == 2L)) 2L else 1L
+  
+  # Convert observed and replicated to 0/1 integers
+  y01      <- as.integer(y_obs == success_val)
+  y_rep01  <- matrix(as.integer(y_rep == success_val), nrow = nrow(y_rep))
+  
+  # Summaries per observation (use all draws)
+  p_hat <- colMeans(y_rep01)
+  p_lo  <- apply(y_rep01, 2, quantile, 0.025)
+  p_hi  <- apply(y_rep01, 2, quantile, 0.975)
+  
+  meta_ppc <- meta
+  meta_ppc$y01        <- y01
+  meta_ppc$p_hat      <- p_hat
+  meta_ppc$p_hat_lo   <- p_lo
+  meta_ppc$p_hat_hi   <- p_hi
+  attr(meta_ppc, "success_val") <- success_val
+  
+  message(sprintf("Overall Pr(Y=%d): observed = %.3f, predicted = %.3f",
+                  success_val, mean(y01), mean(p_hat)))
+  
+  list(meta = meta_ppc, y_rep01 = y_rep01)
+}
+
+# grouped PPC (observed vs predicted prevalence by groups)
+ppc_binary_grouped <- function(ppc_obj, group_cols, ndraws_plot = 200, seed = 1) {
+  stopifnot(is.list(ppc_obj), all(c("meta","y_rep01") %in% names(ppc_obj)))
+  meta_ppc <- ppc_obj$meta
+  y_rep01  <- ppc_obj$y_rep01
+  stopifnot(all(group_cols %in% names(meta_ppc)),
+            ncol(y_rep01) == nrow(meta_ppc))
+  
+  # Quick overall discrete PPC bars
+  if (!requireNamespace("bayesplot", quietly = TRUE)) {
+    stop("Package 'bayesplot' is required. install.packages('bayesplot')")
+  }
+  set.seed(seed)
+  ndraws_plot <- min(ndraws_plot, nrow(y_rep01))
+  draw_idx <- if (ndraws_plot < nrow(y_rep01)) sample(nrow(y_rep01), ndraws_plot) else seq_len(ndraws_plot)
+  bayesplot::ppc_bars(y = meta_ppc$y01, yrep = y_rep01[draw_idx, , drop = FALSE])
+  
+  # Build a stable interaction key with a clear separator
+  SEP <- " | "
+  key <- do.call(interaction, c(meta_ppc[group_cols], list(drop = TRUE, sep = SEP)))
+  groups <- levels(key)
+  
+  # Summaries by group
+  group_summaries <- lapply(groups, function(gname) {
+    idx <- which(key == gname)
+    obs <- mean(meta_ppc$y01[idx])
+    draw_means <- rowMeans(y_rep01[, idx, drop = FALSE])
+    data.frame(
+      .facet = gname,
+      obs = obs,
+      pred_mean = mean(draw_means),
+      pred_lo = quantile(draw_means, 0.025),
+      pred_hi = quantile(draw_means, 0.975),
+      stringsAsFactors = FALSE
+    )
+  })
+  df <- do.call(rbind, group_summaries)
+  
+  # Split .facet back to columns
+  split_keys <- do.call(rbind, strsplit(df$.facet, fixed = TRUE, split = SEP))
+  split_df <- as.data.frame(split_keys, stringsAsFactors = FALSE)
+  names(split_df) <- group_cols
+  df <- cbind(split_df, df[, -1, drop = FALSE])
+  
+  # Plot
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Package 'ggplot2' is required. install.packages('ggplot2')")
+  }
+  library(ggplot2)
+  p <- ggplot(df, aes(x = obs, y = pred_mean)) +
+    geom_abline(slope = 1, intercept = 0, linetype = 2) +
+    geom_errorbar(aes(ymin = pred_lo, ymax = pred_hi), width = 0) +
+    geom_point(size = 2) +
+    coord_equal(xlim = c(0,1), ylim = c(0,1)) +
+    labs(x = "Observed prevalence", y = "Posterior predictive prevalence")
+  
+  # Faceting logic:
+  if (length(group_cols) == 1) {
+    p <- p + facet_wrap(vars(.data[[group_cols[1]]]))
+  } else if (length(group_cols) == 2) {
+    p <- p + facet_grid(
+      rows = vars(.data[[group_cols[2]]]),
+      cols = vars(.data[[group_cols[1]]])
+    )
+  } else {
+    # ≥3 grouping vars: fall back to a single wrap over the combined label
+    df$.facet_label <- do.call(paste, c(df[group_cols], list(sep = SEP)))
+    p <- ggplot(df, aes(x = obs, y = pred_mean)) +
+      geom_abline(slope = 1, intercept = 0, linetype = 2) +
+      geom_errorbar(aes(ymin = pred_lo, ymax = pred_hi), width = 0) +
+      geom_point(size = 2) +
+      coord_equal(xlim = c(0,1), ylim = c(0,1)) +
+      labs(x = "Observed prevalence", y = "Posterior predictive prevalence") +
+      facet_wrap(vars(.facet_label), scales = "free_x")
+  }
+  
+  print(p)
+  invisible(df)
+}
+
+data_fit$y_col = data_fit$esble+1
+data_fit$intervention = ifelse(data_fit$intervention.text=="intervention", 1,0)
+
+ppc_obj <- make_ppc_meta(fit, data_fit, y_col="y_col")  # auto-detects success = 2 if present
+
+# Group by intervention × round
+ppc_binary_grouped(ppc_obj, group_cols = c("round","intervention.text"), ndraws_plot = 200)
+
+# Or by village x round
+ppc_binary_grouped(ppc_obj, group_cols = c("village_name", "intervention.text"))
+
+# Or by village
+ppc_binary_grouped(ppc_obj, group_cols = c("village_name"))
+
 

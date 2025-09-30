@@ -3,11 +3,13 @@
 ###############################################################################
 
 # ------------------------------------------------------------------------------
-# This code can be fitted to the observed CABU-EICO data or to simulat
+# Seasonality Setup – Simulation vs. Fitting
+# SIMULATED DATA: Seasonality
+# MODEL FITTING: Seasonality with spline
 # ------------------------------------------------------------------------------
 # Date created: 1 July 2025
 # Date last updated: 9 September 2025
-# Author: Raneem Aizouk, Esther van Kleef
+# Author: Raneem Aizouk
 
 rm(list=ls())
 
@@ -20,7 +22,7 @@ args <- commandArgs(trailingOnly = TRUE)
 #scenario    <- if (length(args) >= 1) args[[1]] else Sys.getenv("scenario", "Two_step_sine_seasonality")
 #data_source <- if (length(args) >= 2) args[[2]] else Sys.getenv("data_source", "simulated")
 
-scenario    <- Sys.getenv("scenario", "Two_step_sine_seasonality")
+scenario    <- Sys.getenv("scenario", "One_step_sine_seasonality")
 data_source <- Sys.getenv("data_source", "simulated")
 
 cat("R sees scenario:", scenario, "\n")
@@ -84,12 +86,12 @@ if (data_source == "simulated") {
                    "Simulated_data_seasonality",
                    "Simulated_data_noseasonality")
   
-  #sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
-  #sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
+  sim_stan_data <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen, ".rds"))
+  sim_df <- readRDS(paste0("./CABU_EICO/data/Simulated_data/", scen_df, ".rds"))
   
   # When run locally
-  sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
-  sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
+  #sim_stan_data <- readRDS("./Data/Simulated_data/Simulated_data_seasonality_stan_data.rds")
+  #sim_df <- readRDS("./Data/Simulated_data/Simulated_data_seasonality.rds")
   
   stan_data_fit <- list(
     N = nrow(sim_df),
@@ -128,16 +130,6 @@ if (data_source == "simulated") {
 }
 
 names(stan_data_fit)
-
-# Centre age and sex to improve model parameterisation
-# Center age (subtract mean)
-#age_c <- stan_data_fit[["age"]] - mean(stan_data_fit[["age"]], na.rm = TRUE)
-
-# Center sex (subtract mean, e.g. if 60% male, mean=0.6)
-#sex_c <- stan_data_fit[["sexe"]] - mean(stan_data_fit[["sexe"]], na.rm = TRUE)
-
-#stan_data_fit[["age_c"]] <- age_c
-#stan_data_fit[["sex_c"]] <- sex_c
 
 #---------------------------------------------------------------------------
 # Model code
@@ -282,15 +274,19 @@ parameters {
   real<lower=0> a1;
   real<lower=0, upper=2*pi()> phi;
   real beta_int1_1;
-  real beta_int1_2;
+  //real beta_int1_2;
   real beta_int2_1;
-  real beta_int2_2;
+  //real beta_int2_2;
 }
 
 transformed parameters {
   real q_1_2_base = -4.547 + q_1_2_raw * sigma_q_1_2; // was -3.5, not sure why as haverkate et al is log(0.0053). Assume twice as high as in the netherlands though
   // Centre for 4-month median duration
   real q_2_1_base = -5.154 + q_2_1_raw * sigma_q_2_1;
+  
+  // Ensure that beta 1_2 is beta1_1 so one effect over the full intervention period
+  real beta_int1_2 = beta_int1_1;  
+  real beta_int2_2 = beta_int2_1;  
   
   vector[H] u = u_raw * sigma_u;
   vector[num_data] Y_hat_1_2;
@@ -310,9 +306,9 @@ model {
   beta_1_2_sexe ~ normal(0, 1);
   beta_2_1_sexe ~ normal(0, 1);
   beta_int1_1 ~ normal(0, 1);
-  beta_int1_2 ~ normal(0, 1);
+  //beta_int1_2 ~ normal(0, 1);
   beta_int2_1 ~ normal(0, 1);
-  beta_int2_2 ~ normal(0, 1);
+  //beta_int2_2 ~ normal(0, 1);
   
   u_raw ~ normal(0, 0.5);
   sigma_u ~ normal(0, 0.5);
@@ -350,7 +346,7 @@ model {
           
           // Post-intervention 1
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -361,7 +357,7 @@ model {
           
           // Pre-intervention 2 (intervention 1 only)
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           {
             matrix[2,2] P = transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -369,7 +365,7 @@ model {
           
           // Post-intervention 2
           log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_2;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -380,11 +376,11 @@ model {
           // Case 3a: Interval lies fully within post-intervention 2
           if (midpoint >= t_star2 && intervention[n] == 1) {
             log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-            log_lambda_2_1 = log21_base;
+            log_lambda_2_1 = log21_base + beta_int2_2;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Interval lies fully within post-intervention 1
             log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-            log_lambda_2_1 = log21_base;
+            log_lambda_2_1 = log21_base + beta_int2_1;
           } else {
             // Case 3c: Interval is fully pre-intervention
             log_lambda_1_2 = log12_base + s12;
@@ -420,7 +416,7 @@ model {
           
           // Post-intervention 1 and pre-intervention 2
           log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -431,7 +427,7 @@ model {
           
           // Pre-intervention 2
           log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1; 
           {
             matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -439,7 +435,7 @@ model {
           
           // Post-intervention 2
           log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_2;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -450,11 +446,11 @@ model {
           // Case 3a: Full interval during intervention 2
           if (midpoint >= t_star2 && intervention[n] == 1) {
             log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-            log_lambda_2_1 = log21_base;
+            log_lambda_2_1 = log21_base + beta_int2_2;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Full interval during intervention 1
             log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-            log_lambda_2_1 = log21_base;
+            log_lambda_2_1 = log21_base + beta_int2_1;
           } else {
             // Case 3c: Full interval pre-intervention
             log_lambda_1_2 = log12_base + s12m;
@@ -490,7 +486,7 @@ model {
           
           // Post-intervention 1
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           {
             matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -501,7 +497,7 @@ model {
           
           // Pre-intervention 2 (intervention 1 only)
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           {
             matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -509,7 +505,7 @@ model {
           
           // Post-intervention 2 (intervention 1 + 2)
           log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_2;
           {
             matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
             P_total *= P;
@@ -520,11 +516,11 @@ model {
           // Case 3a: Entire interval after intervention 2
           if (midpoint >= t_star2 && intervention[n] == 1) {
             log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-            log_lambda_2_1 = log21_base;
+            log_lambda_2_1 = log21_base + beta_int2_2;
           } else if (midpoint >= t_star1 && intervention[n] == 1) {
             // Case 3b: Entire interval after intervention 1 but before intervention 2
             log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-            log_lambda_2_1 = log21_base;
+            log_lambda_2_1 = log21_base + beta_int2_1;
           } else {
             // Case 3c: Entire interval before any intervention
             log_lambda_1_2 = log12_base + s12l;
@@ -646,7 +642,7 @@ generated quantities {
         //----------------------------------------------------------------------------------------------------------
 
         log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_1;
         {
           real d = d1b;
           matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -675,7 +671,7 @@ generated quantities {
         // Pre-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_1;
         {
           real d = d1a;
           matrix[2,2] P = transition_matrix(d1a, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -695,7 +691,7 @@ generated quantities {
         // Post-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_2;
         {
           real d = d1b;
           matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -725,14 +721,14 @@ generated quantities {
         //----------------------------------------------------------------------------------------------------------
         if (midpoint >= t_star2 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12 + beta_int1_2;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_2;
           second_intervention_used[n] = 1;
           
         // Case 3b: Entire interval after intervention 1 but before intervention 2
         //----------------------------------------------------------------------------------------------------------
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12 + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           second_intervention_used[n] = 0;
           
         // Case 3c: Entire interval before any intervention
@@ -800,7 +796,7 @@ generated quantities {
         // Post-intervention 1
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_1;
         {
           real dd = d2b;
           matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -828,7 +824,7 @@ generated quantities {
         // Pre-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12m + beta_int1_1;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_1;
         {
           real dd = d2a;
           matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -848,7 +844,7 @@ generated quantities {
         // Post-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_2;
         {
           real dd = d2b;
           matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -877,7 +873,7 @@ generated quantities {
         //----------------------------------------------------------------------------------------------------------
         if (midpoint >= t_star2 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12m + beta_int1_2;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_2;
           second_intervention_used[n] = 1;
           
           // Case 3b: Entire interval after intervention 1 but before intervention 2
@@ -952,7 +948,7 @@ generated quantities {
         // Post-intervention 1
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_1;
         {
           real d = d1b;
           matrix[2,2] P = transition_matrix(d1b, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -981,7 +977,7 @@ generated quantities {
         // Pre-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_1;
         {
           real d = d2a;
           matrix[2,2] P = transition_matrix(d2a, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -1001,7 +997,7 @@ generated quantities {
         // Post-intervention 2
         //----------------------------------------------------------------------------------------------------------
         log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-        log_lambda_2_1 = log21_base;
+        log_lambda_2_1 = log21_base + beta_int2_2;
         {
           real d = d2b;
           matrix[2,2] P = transition_matrix(d2b, exp(log_lambda_1_2), exp(log_lambda_2_1));
@@ -1031,14 +1027,14 @@ generated quantities {
         //----------------------------------------------------------------------------------------------------------
         if (midpoint >= t_star2 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12l + beta_int1_2;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_2;
           second_intervention_used[n] = 1;
           
         // Case 3b: Entire interval after intervention 1 and before intervention 2
         //----------------------------------------------------------------------------------------------------------
         } else if (midpoint >= t_star1 && intervention[n] == 1) {
           log_lambda_1_2 = log12_base + s12l + beta_int1_1;
-          log_lambda_2_1 = log21_base;
+          log_lambda_2_1 = log21_base + beta_int2_1;
           second_intervention_used[n] = 0;
           
         // Case 3c: Entire interval before any intervention
@@ -1105,7 +1101,7 @@ keep_pars <- c(
   "q_2_1_raw","sigma_q_2_1",
   # covariate effects
   "beta_1_2_age","beta_2_1_age","beta_1_2_sexe","beta_2_1_sexe",
-  "beta_int1_1","beta_int1_2",
+  "beta_int1_1","beta_int1_2","beta_int2_1","beta_int2_2",
   # random effects
   "sigma_u","u",
   # derived/outputs
@@ -1142,10 +1138,6 @@ stan_fit <- sampling(
 saveRDS(stan_fit, file = paste0(output_dir,scenario,data_source, ".rds"))
 
 print(summary(stan_fit)$summary)
-
-
-
-
 
 
 

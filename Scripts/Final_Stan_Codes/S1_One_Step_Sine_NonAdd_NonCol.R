@@ -282,15 +282,18 @@ parameters {
   real<lower=0> a1;
   real<lower=0, upper=2*pi()> phi;
   real beta_int1_1;
-  real beta_int1_2;
-  real beta_int2_1;
-  real beta_int2_2;
+  //real beta_int1_2;
+  //real beta_int2_1;
+  //real beta_int2_2;
 }
 
 transformed parameters {
   real q_1_2_base = -4.547 + q_1_2_raw * sigma_q_1_2; // was -3.5, not sure why as haverkate et al is log(0.0053). Assume twice as high as in the netherlands though
   // Centre for 4-month median duration
   real q_2_1_base = -5.154 + q_2_1_raw * sigma_q_2_1;
+  
+  // Ensure that beta 1_2 is beta1_1 so one effect over the full intervention period
+  real beta_int1_2 = beta_int1_1;  
   
   vector[H] u = u_raw * sigma_u;
   vector[num_data] Y_hat_1_2;
@@ -310,9 +313,9 @@ model {
   beta_1_2_sexe ~ normal(0, 1);
   beta_2_1_sexe ~ normal(0, 1);
   beta_int1_1 ~ normal(0, 1);
-  beta_int1_2 ~ normal(0, 1);
-  beta_int2_1 ~ normal(0, 1);
-  beta_int2_2 ~ normal(0, 1);
+  //beta_int1_2 ~ normal(0, 1);
+  //beta_int2_1 ~ normal(0, 1);
+  //beta_int2_2 ~ normal(0, 1);
   
   u_raw ~ normal(0, 0.5);
   sigma_u ~ normal(0, 0.5);

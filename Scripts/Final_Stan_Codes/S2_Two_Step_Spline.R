@@ -9,8 +9,8 @@
 # ------------------------------------------------------------------------------
 
 # Date created: 1 July 2025
-# Date last updated: 1 August 2025
-# Author: Raneem Aizouk
+# Date last updated: 30 September 2025
+# Author: Raneem Aizouk; Esther van Kleef
 
 rm(list=ls())
 

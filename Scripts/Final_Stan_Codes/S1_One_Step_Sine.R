@@ -8,8 +8,8 @@
 # MODEL FITTING: Seasonality with spline
 # ------------------------------------------------------------------------------
 # Date created: 1 July 2025
-# Date last updated: 9 September 2025
-# Author: Raneem Aizouk
+# Date last updated: 30 September 2025
+# Author: Raneem Aizouk; Esther van Kleef
 
 rm(list=ls())
 

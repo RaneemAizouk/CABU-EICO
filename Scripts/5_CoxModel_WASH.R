@@ -38,7 +38,7 @@ num_unique_members <- data %>%
 print(num_unique_members) # 617
 
 #-----------------------------------------------------------
-#Find control individuals with 4 rounds of data
+# Find control individuals with 4 rounds of data
 #-----------------------------------------------------------
 
 four_sample_members <- data %>%
@@ -115,7 +115,7 @@ data_complete$sexe <- as.integer(ifelse(data_complete$sexe == "Female", 1, 0))
 
 data_complete$month <- as.integer(data_complete$month)
 
-# 1) Set calendar time reference point
+# Set calendar time reference point
 # -------------------------------------------------------------
 # We define a fixed calendar date `t` as the reference start time for the study: 
 t <- as.Date("2022-10-03")
@@ -246,9 +246,9 @@ for (i in 2:n) {
 
 data_complete<- data_complete  %>% 
   relocate( clearance , .after= ACQ)
-##########
+
+# WASH variable harmonization across rounds
 # ------------------------------------------------------------------------------
-# Step 4: WASH Variable Harmonization Across Rounds
 #
 # Rationale:
 # Many WASH indicators (and SES) are only collected or meaningfully answered in rounds 1 and 4.
@@ -326,10 +326,10 @@ data_complete %>%
 
 table(data_complete$correct.handwashing.binary)
 
-###############
 
-## 5) Add rainy_effect/seasonal
+# Add rainy_effect/seasonal
 # ------------------------------------------------------------------------------
+
 # Create a "rainy_effect" time-varying covariate to capture rainy season exposure
 #
 # Goal: For each interval (between two consecutive observations of the same individual),
@@ -535,6 +535,7 @@ data_model <- data_model %>% filter(round != 1)
 #########################################################
 # FIT MODEL USING RAINY VARIABLE
 #########################################################
+
 table(data_model$correct.handwashing.binary, data_model$ACQ)
 table(data_model$main.drinking.water.rainy.binary, data_model$ACQ)
 table(data_model$main.drinking.water.dry.binary, data_model$ACQ)

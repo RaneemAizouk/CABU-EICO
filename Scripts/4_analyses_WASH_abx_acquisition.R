@@ -3,6 +3,7 @@
 ########################################################################################
 # Author: Esther van Kleef
 # Date: 4 October 2025
+# Last updated: 14 October 2025
 
 rm(list = ls())
 
@@ -123,7 +124,7 @@ wash_hh_all$weight   <- ifelse(is.na(wash_hh_all$weight),   1, norm_w(wash_hh_al
 wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_stool$weight))
 
 # -------------------------------------------------------------------------------
-# SURVEY-WEIGHTED WaSH change (ALL HH): arm×round prevalences + DiD PR
+# SURVEY-WEIGHTED WASH change (ALL HH): arm × round prevalences + DiD PR
 # -------------------------------------------------------------------------------
 
 # In the below, I have used a quasipoisson as the binomial model did not converge for all variables
@@ -133,7 +134,7 @@ wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_st
 # Prepare long dataset
 # -------------------------------------------------------------------
 
-# USE ALL DATA (wash_hh_all) OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED (wash_hh_stool)
+# !!! USE ALL DATA (wash_hh_all) OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED (wash_hh_stool) !!!
 
 # Below is with all hh data, have for now run it twice, changing the dataset to wash_hh_stool and store seperately to get the two tables stored
 wash_long_all <- wash_hh_all %>%

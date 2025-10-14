@@ -129,7 +129,7 @@ wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_st
 
 # In the below, I have used a quasipoisson as the binomial model did not converge for all variables
 # I have followed what is described here https://doi.org/10.1093/aje/kwh090
-# 
+
 
 # Prepare long dataset
 # -------------------------------------------------------------------
@@ -239,7 +239,7 @@ fit_one_indicator <- function(ind) {
 # Run for all indicators
 # -------------------------------------------------------------------
 
-results_table <- purrr::map_dfr(inds, fit_one_indicator)
+results_table <- map_dfr(inds, fit_one_indicator)
 
 # -------------------------------------------------------------------
 # Formatted output
@@ -265,7 +265,7 @@ results_table = results_table[c(6,7,1,2,3,4,5),]
 results_table
 
 # STORE OUTPUT FOR SI
-writexl::write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash.xlsx")
+write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash.xlsx")
 
 # STORE OUTPUT FOR SI - STOOL ONLY
-writexl::write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash_STOOL_hh.xlsx")
+write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash_STOOL_hh.xlsx")

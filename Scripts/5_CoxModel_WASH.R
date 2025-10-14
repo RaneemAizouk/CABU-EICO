@@ -1181,7 +1181,7 @@ coxm_summary <- summary(fit_season)
 
 # Pretty labels (edit as you like)
 pretty_labels <- c(
-  "rainy_effect1" = "Seasonality: Rainy season exposure",
+  "rainy_effect" = "Seasonality: Rainy season exposure",
   "main.drinking.water.dry.binaryImproved" = "W1a: Drinking water (dry): Improved",
   "main.drinking.water.rainy.binaryImproved" = "W1b: Drinking water (rainy): Improved",
   "cleaning.water.storage.binaryTreated" = "W2: Stored water: Treated",

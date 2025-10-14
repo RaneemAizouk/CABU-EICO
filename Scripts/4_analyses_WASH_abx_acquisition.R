@@ -165,7 +165,7 @@ fit_one_indicator <- function(ind) {
                 family = quasipoisson(link = "log"))
   
   # Predicted adjusted prevalences (for rainy season)
-  # adjusted prevalences (set rainy = 1; keep your predict() syntax)
+  # adjusted prevalences (set rainy = 1, this as most surveys were taken in the rainy season so most representative)
   newdat <- expand.grid(
     arm   = levels(d$arm),
     round = levels(d$round),
@@ -196,11 +196,11 @@ fit_one_indicator <- function(ind) {
     round = "post",
     rainy = 1
   )
-  # make them factors with the SAME levels as used in the model
+  # Factors with the same levels as used in the model
   newdat_post$arm   <- factor(newdat_post$arm,   levels = levels(d$arm))
   newdat_post$round <- factor(newdat_post$round, levels = levels(d$round))
   
-  # linear predictor & SE
+  # linear predictor and SE
   pred_post <- as.data.frame(predict(fit, newdata = newdat_post, type = "link", se.fit = TRUE))
   
   X <- model.matrix(~ arm * round + rainy, newdat_post)

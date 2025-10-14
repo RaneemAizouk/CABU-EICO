@@ -421,36 +421,36 @@ data_complete <- data_complete %>%
     # ),
     main.drinking.water.dry.binary = factor(
       ifelse(is.na(main.drinking.water.dry.binary), "Missing", main.drinking.water.dry.binary),
-      levels = c("Improved", "Unimproved", "Missing")
+      levels = c("Unimproved","Improved",  "Missing")
     ),
     main.drinking.water.rainy.binary = factor(
       ifelse(is.na(main.drinking.water.rainy.binary), "Missing", main.drinking.water.rainy.binary),
-      levels = c("Improved", "Unimproved", "Missing")
+      levels = c("Unimproved", "Improved", "Missing")
     ),
     cleaning.water.storage.binary = factor(
       ifelse(is.na(cleaning.water.storage.binary), "Missing",
              ifelse(cleaning.water.storage.binary == "Yes", "Treated", "Not treated")),
-      levels = c("Treated", "Not treated", "Missing")
+      levels = c("Not treated","Treated",  "Missing")
     ),
     correct.handwashing.binary = factor(
       ifelse(is.na(correct.handwashing.binary), "Missing",
              ifelse(correct.handwashing.binary == "Yes", "Correct", "Not Correct")),
-      levels = c("Correct", "Not Correct", "Missing")
+      levels = c("Not Correct","Correct",  "Missing")
     ),
     improved.sanitation.binary = factor(
       ifelse(is.na(improved.sanitation.binary), "Missing",
              ifelse(improved.sanitation.binary == "Yes", "Improved", "Unimproved")),
-      levels = c("Improved", "Unimproved", "Missing")
+      levels = c("Unimproved","Improved",  "Missing")
     ),
     livestock.access.house.binary = factor(
       ifelse(is.na(livestock.access.house.binary), "Missing",
              ifelse(livestock.access.house.binary == "No", "No Access", "Access")),
-      levels = c("No Access", "Access", "Missing")
+      levels = c( "Access", "No Access","Missing")
     ),
     animal.excrement.floor.binary = factor(
       ifelse(is.na(animal.excrement.floor.binary), "Missing",
              ifelse(animal.excrement.floor.binary == "No", "Not Exposed", "Exposed")),
-      levels = c("Not Exposed", "Exposed", "Missing")
+      levels = c("Exposed", "Not Exposed", "Missing")
     )
   )
 
@@ -706,13 +706,13 @@ exp(coxm_summary$coefficients)
 # Clean labels (removed age & sex)
 pretty_labels <- c(
   "rainy_effect1" = "Seasonality: Rainy season exposure",
-  "main.drinking.water.dry.binaryUnimproved" = "W1a: Drinking water (dry): Unimproved",
-  "main.drinking.water.rainy.binaryUnimproved" = "W1b: Drinking water (rainy): Unimproved",
-  "cleaning.water.storage.binaryNot treated" = "W2: Stored water: Not treated",
-  "correct.handwashing.binaryNot Correct" = "W3: Handwashing: Incorrect",
-  "improved.sanitation.binaryUnimproved" = "W4: Sanitation: Unimproved",
-  "livestock.access.house.binaryAccess" = "W5: Livestock access inside",
-  "animal.excrement.floor.binaryExposed" = "W6: Animal excrement on floor"
+  "main.drinking.water.dry.binaryImproved" = "W1a: Drinking water (dry): Improved",
+  "main.drinking.water.rainy.binaryImproved" = "W1b: Drinking water (rainy): Improved",
+  "cleaning.water.storage.binaryTreated" = "W2: Stored water: Treated",
+  "correct.handwashing.binaryCorrect" = "W3: Handwashing: Correct",
+  "improved.sanitation.binaryImproved" = "W4: Sanitation: Improved",
+  "livestock.access.house.binaryNo Access" = "W5: No livestock access inside",
+  "animal.excrement.floor.binaryNot Exposed" = "W6: No animal excrement on floor"
 )
 
 ordered_terms <- names(pretty_labels)
@@ -965,13 +965,16 @@ coxm_summary <- summary(fit_season_ct)
 # Pretty labels (edit as you like)
 pretty_labels <- c(
   "rainy_effect" = "Seasonality: Rainy season exposure",
-  "main.drinking.water.dry.binaryUnimproved"   = "W1a: Drinking water (dry): Unimproved",
-  "main.drinking.water.rainy.binaryUnimproved" = "W1b: Drinking water (rainy): Unimproved",
-  "cleaning.water.storage.binaryNot treated"   = "W2: Stored water: Not treated",
-  "correct.handwashing.binaryNot Correct"      = "W3: Handwashing: Incorrect",
-  "improved.sanitation.binaryUnimproved"       = "W4: Sanitation: Unimproved",
-  "livestock.access.house.binaryAccess"        = "W5: Livestock access inside",
-  "animal.excrement.floor.binaryExposed"       = "W6: Animal excrement on floor"
+  pretty_labels <- c(
+    "rainy_effect1" = "Seasonality: Rainy season exposure",
+    "main.drinking.water.dry.binaryImproved" = "W1a: Drinking water (dry): Improved",
+    "main.drinking.water.rainy.binaryImproved" = "W1b: Drinking water (rainy): Improved",
+    "cleaning.water.storage.binaryTreated" = "W2: Stored water: Treated",
+    "correct.handwashing.binaryCorrect" = "W3: Handwashing: Correct",
+    "improved.sanitation.binaryImproved" = "W4: Sanitation: Improved",
+    "livestock.access.house.binaryNo Access" = "W5: No livestock access inside",
+    "animal.excrement.floor.binaryNot Exposed" = "W6: No animal excrement on floor"
+  )
 )
 
 # Order to display (top→bottom)
@@ -1178,14 +1181,14 @@ coxm_summary <- summary(fit_season)
 
 # Pretty labels (edit as you like)
 pretty_labels <- c(
-  "rainy_effect" = "Seasonality: Rainy season exposure",
-  "main.drinking.water.dry.binaryUnimproved"   = "W1a: Drinking water (dry): Unimproved",
-  "main.drinking.water.rainy.binaryUnimproved" = "W1b: Drinking water (rainy): Unimproved",
-  "cleaning.water.storage.binaryNot treated"   = "W2: Stored water: Not treated",
-  "correct.handwashing.binaryNot Correct"      = "W3: Handwashing: Incorrect",
-  "improved.sanitation.binaryUnimproved"       = "W4: Sanitation: Unimproved",
-  "livestock.access.house.binaryAccess"        = "W5: Livestock access inside",
-  "animal.excrement.floor.binaryExposed"       = "W6: Animal excrement on floor"
+  "rainy_effect1" = "Seasonality: Rainy season exposure",
+  "main.drinking.water.dry.binaryImproved" = "W1a: Drinking water (dry): Improved",
+  "main.drinking.water.rainy.binaryImproved" = "W1b: Drinking water (rainy): Improved",
+  "cleaning.water.storage.binaryTreated" = "W2: Stored water: Treated",
+  "correct.handwashing.binaryCorrect" = "W3: Handwashing: Correct",
+  "improved.sanitation.binaryImproved" = "W4: Sanitation: Improved",
+  "livestock.access.house.binaryNo Access" = "W5: No livestock access inside",
+  "animal.excrement.floor.binaryNot Exposed" = "W6: No animal excrement on floor"
 )
 
 # Order to display (top→bottom)

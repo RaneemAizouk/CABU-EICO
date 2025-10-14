@@ -133,7 +133,8 @@ wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_st
 # Prepare long dataset
 # -------------------------------------------------------------------
 
-wash_long_all <- wash_hh_all %>%
+# USE ALL DATA OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED
+wash_long_all <- wash_hh_stool %>%
   pivot_longer(all_of(indicators), names_to = "indicator", values_to = "y") %>%
   mutate(
     y = as.numeric(y),
@@ -263,3 +264,5 @@ results_table
 # STORE OUTPUT FOR SI
 writexl::write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash.xlsx")
 
+# STORE OUTPUT FOR SI - STOOL ONLY
+writexl::write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash_STOOL_hh.xlsx")

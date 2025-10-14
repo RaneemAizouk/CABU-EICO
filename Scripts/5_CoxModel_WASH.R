@@ -811,6 +811,10 @@ write.csv(df_forest, file="./Output/Model_results/Model_summaries/CoxPH_calendar
 # Calenar-time alternative - left-truncuated staggered entry (accurate representation of the study)
 #---------------------------------------------------------------------------------------------------
 
+# THIS ONE IS USED AS MAIN ANALYSES IN THE MANUSCRIPT
+#----------------------------------------------------------------
+
+
 period <- 365  # yearly seasonality; set 366 if you insist on leap-year scale
 
 d_long <- data_model_tv %>%
@@ -972,8 +976,8 @@ pretty_labels <- c(
     "cleaning.water.storage.binaryTreated" = "W2: Stored water: Treated",
     "correct.handwashing.binaryCorrect" = "W3: Handwashing: Correct",
     "improved.sanitation.binaryImproved" = "W4: Sanitation: Improved",
-    "livestock.access.house.binaryNo Access" = "W5: No livestock access inside",
-    "animal.excrement.floor.binaryNot Exposed" = "W6: No animal excrement on floor"
+    "livestock.access.house.binaryNo Access" = "W5: Livestock access inside: No",
+    "animal.excrement.floor.binaryNot Exposed" = "W6: Animal excrement on floor: No"
   )
 )
 
@@ -1066,6 +1070,10 @@ write.csv(df_forest, file="./Output/Model_results/Model_summaries/CoxPH_calendar
 # (see https://doi.org/10.1186/s12874-016-0199-y)
 # Fitting two time scales may be tricky. We are doing that somewhat by including seasonality as a binary variable based on 
 # The calendar dates between interval. Just fitting to date.use would not make sense as 
+
+# THIS ONE IS USED AS SENSITIVITY ANALYSES IN THE MANUSCRIPT
+#----------------------------------------------------------------
+
 
 # Build start–stop intervals per individual 
 # Assumes columns:
@@ -1187,8 +1195,8 @@ pretty_labels <- c(
   "cleaning.water.storage.binaryTreated" = "W2: Stored water: Treated",
   "correct.handwashing.binaryCorrect" = "W3: Handwashing: Correct",
   "improved.sanitation.binaryImproved" = "W4: Sanitation: Improved",
-  "livestock.access.house.binaryNo Access" = "W5: No livestock access inside",
-  "animal.excrement.floor.binaryNot Exposed" = "W6: No animal excrement on floor"
+  "livestock.access.house.binaryNo Access" = "W5: Livestock access inside: No",
+  "animal.excrement.floor.binaryNot Exposed" = "W6: Animal excrement on floor: No"
 )
 
 # Order to display (top→bottom)

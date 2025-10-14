@@ -133,8 +133,10 @@ wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_st
 # Prepare long dataset
 # -------------------------------------------------------------------
 
-# USE ALL DATA OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED
-wash_long_all <- wash_hh_stool %>%
+# USE ALL DATA (wash_hh_all) OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED (wash_hh_stool)
+
+# Below is with all hh data, have for now run it twice, changing the dataset to wash_hh_stool and store seperately to get the two tables stored
+wash_long_all <- wash_hh_all %>%
   pivot_longer(all_of(indicators), names_to = "indicator", values_to = "y") %>%
   mutate(
     y = as.numeric(y),

@@ -1,38 +1,21 @@
-**Different scripts (script folder):**
-1) link_labresultsBF_all.R
-2) link_labresultsDRC.R
-3) selection_samples_dna_r1tor3.R
-4) selection_samples_dna.R
-
 **Different databases:** 
 
 Burkina Faso
-  _> data > BF > Raw > Household survey_
-  
-  _> data > BF > Raw > Patient survey_
-
-  _> data > BF > Clean > linked_final_
-  1) bf_hh_stool_all_r0123.csv               =
-  2) bf_esbl_stool_all_r0123.csv             =
-  3) bf_hh_stool_all_r0123_wide.csv          =
-  
   _> data > BF > Clean > use_in_analyses_
-  1) bf_esbl_wide_completecases.rda           = 
-  2) bf_esbl0123_long_completecases.rda       =
-  3) bf_esbl_long_completecases.rda           =
-
+  1) bf_esbl0123_long_all.rda                 = Cleaned feacal sample dataset linked with households survey containing the observations of all individiuals
+  2) bf_esbl0123_long_completecases.rda       = Cleaned feacal sample dataset linked with households survey containing the observations of all individiuals with four observations (complete follow up)
+  3) Household_WASH_BF.csv                    = Household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken
+  4) Household_stool_WASH_BF.csv              = Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken
+  
      
-Democratic Republic of Congo
-  _> data > DRC > Raw > Household survey_
-  
-  _> data > DRC > Raw > Patient survey_
-
-  _> data > DRC > Clean > linked_final_
-  1) humanALL_Kim_pseudo.csv                =
-  2) HHvisits_selles_R1R2R3.csv             =
-  3) rodent_merged.csv                      =
-  
-  _> data > DRC > Clean > use_in_analyses_
-
 **Other (Documentation folder):**
 1) Interpretation antibiogramme des isolats PORTAGE asymptomatique_ESBL_E. coliKlebsielle.docx
+
+**Different scripts (script folder):**
+1) data_set_preparation_spline.R            = Script that converts the stool sampling data in a stan format for the markov model
+2) scenario_fit_comparison.R                = Script that compares fit across the different intervention scenarios. Can be used for observed and simulated data
+3) descriptive_WASH.R                       = Script that cleans and describes the households survey results, both at individual and household level
+4) model_output_summary.R                   = Script that summarises the main model output. Can be used for all intervention scenarios
+5) CoxModel_WASH.R                          = Script that fits a Cox proportional hazard model to the complete stool sampling data (i.e. of those with four observations)
+5) analyses_change_WASH.R                   = Script that estimates the change in WASH indicators
+6) figures_and_tables.R                     = Script that develops the manuscript figures and tables

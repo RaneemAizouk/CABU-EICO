@@ -3,7 +3,7 @@
 ###############################################################################
 
 # ------------------------------------------------------------------------------
-# This code can be fitted to the observed CABU-EICO data or to simulat
+# This code can be fitted to the observed CABU-EICO data or to simulate
 # ------------------------------------------------------------------------------
 # Date created: 1 July 2025
 # Date last updated: 9 September 2025

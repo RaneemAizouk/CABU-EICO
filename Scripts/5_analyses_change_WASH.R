@@ -1,5 +1,5 @@
 ########################################################################################
-# THIS CODE ASSOCIATES CHANGE IN VILLAGE LEVEL ABX AND WASH WITH ESBL-E ACQUISITION
+# THIS CODE ESTIMATES CHANGE IN WASH 
 ########################################################################################
 # Author: Esther van Kleef
 # Date: 4 October 2025
@@ -23,6 +23,31 @@ watch <- read.csv(file.path(DirectoryData, "use_in_analyses/watch_acute_offset.c
 
 # MSM village ESBL results (calendar-time adjusted) — long with village, Group, phase_label, median, var, (lo/hi, n_draws)
 msm_draws <- read.csv("./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/inc_s1.csv")
+
+# Villages (that are the clusters) of CABU-EICO
+villages = readxl::read_xlsx(paste0("./Data/BF/Raw/bf_villages_cabu.xlsx"))
+names(villages) = c("village", "village_name","intervention_text","ajouter")
+
+village_size = readxl::read_xlsx(paste0("./Data/BF/Raw/Sélection et randomisation grappes CABU_B Nanoro.xlsx"), sheet=1)
+names(village_size)
+village_size = village_size %>% select(c(`Nom des villages`, ménages, `population active (Mar 2023 update)`))%>%
+  rename(
+    village_name = `Nom des villages`,
+    n.households =  ménages,
+    n.population = `population active (Mar 2023 update)`
+  ) %>%
+  filter(!is.na(village_name))
+head(village_size)
+
+villages = left_join(villages, village_size, by="village_name")
+villages$village_name = tolower(villages$village_name)
+
+# Inform the number of households based on average household size
+m_size = median(villages$n.population[villages$village_name!="pella"]/villages$n.households[villages$village_name!="pella"])
+
+wash$n.households[wash$village_name=="pella"] = wash$n.population[wash$village_name=="pella"]/m_size
+
+#wash = left_join(wash, villages%>%select(c(village_name, n.population, n.households)))
 
 # -------------------------------------------------------------------------------
 # Functions
@@ -54,6 +79,7 @@ prep_wash <- function(df) {
       menage_id = .data[["menage_id"]],
       n.householdmember = .data[["n.householdmember"]],
       n.population = .data[["n.population"]],
+      n.households = .data[["n.households"]],
       village   = .data[[vill_nm]],
       arm_raw   = .data[[arm_nm]],
       round_raw = .data[[round_nm]],
@@ -61,25 +87,25 @@ prep_wash <- function(df) {
       date = as.Date(date, format = "%Y-%m-%d"),
       month = month(date),
       rainy = ifelse(month %in% c(6:11), 1, 0),
-      safe_dry    = case_when(main.drinking.water.dry.binary == "Improved" ~ 1, 
-                              main.drinking.water.dry.binary == "Unimproved" ~ 0,
+      main.drinking.water.dry.binary    = case_when(main.drinking.water.dry.binary == "Improved" ~ 0, 
+                              main.drinking.water.dry.binary == "Unimproved" ~ 1,
                               TRUE ~ NA_real_),
-      safe_rainy  = case_when(main.drinking.water.rainy.binary == "Improved" ~ 1, 
-                              main.drinking.water.rainy.binary == "Unimproved" ~ 0,
+      main.drinking.water.rainy.binary  = case_when(main.drinking.water.rainy.binary == "Improved" ~ 0, 
+                              main.drinking.water.rainy.binary == "Unimproved" ~ 1,
                               TRUE ~ NA_real_),
-      clean_storage = case_when(cleaning.water.storage.binary== "Yes" ~ 1, 
-                                cleaning.water.storage.binary == "No" ~ 0,
+      no.cleaning.water.storage.binary = case_when(cleaning.water.storage.binary== "Yes" ~ 0, 
+                                cleaning.water.storage.binary == "No" ~ 1,
                                 TRUE ~ NA_real_),
-      correct_hw    = case_when(correct.handwashing.binary == "Yes" ~ 1,
-                                correct.handwashing.binary == "No" ~ 0,
+      no.correct.handwashing.binary  = case_when(correct.handwashing.binary == "Yes" ~ 0,
+                                correct.handwashing.binary == "No" ~ 1,
                                 TRUE ~ NA_real_),
-      improved_san  = case_when(improved.sanitation.binary == "Yes" ~  1,
-                                improved.sanitation.binary== "No" ~ 0,
+      no.improved.sanitation.binary = case_when(improved.sanitation.binary == "Yes" ~  0,
+                                improved.sanitation.binary== "No" ~ 1,
                                 TRUE ~ NA_real_),
-      no_livestock_in_house = case_when(livestock.access.house.binary == "Yes" ~ 1,
+      livestock.access.house.binary = case_when(livestock.access.house.binary == "Yes" ~ 1,
                                         livestock.access.house.binary == "No" ~ 0,
                                         TRUE ~ NA_real_),
-      no_animal_excrement_on_floor = case_when(animal.excrement.floor.binary == "Yes" ~ 1,
+      animal.excrement.floor.binary  = case_when(animal.excrement.floor.binary == "Yes" ~ 1,
                                                animal.excrement.floor.binary == "No" ~ 0,
                                                TRUE ~ NA_real_)
     ) %>%
@@ -95,33 +121,73 @@ prep_wash <- function(df) {
   out
 }
 
-wash_hh_all   <- prep_wash(wash)
-wash_hh_stool <- prep_wash(wash_stool)
+# While waiting for sampling date of second round, impute the season with data from the first round (as is a year later)
 
+
+wash_hh_all   <- prep_wash(wash)
+wash_hh_all$rainy = ifelse(is.na(wash_hh_all$date), NA, wash_hh_all$rainy) # This as date is missing for all households in the 2nd round, checked with Franck, waiting for reply
+
+wash_hh_all <- wash_hh_all %>%
+  group_by(menage_id) %>%
+  mutate(rainy = first(na.omit(rainy))) %>%
+  ungroup()
+
+
+# Select only those where stool samples were taken
+#wash_hh_stool <- prep_wash(wash_stool)
+wash_hh_stool <- wash_hh_all %>% filter(menage_id %in% unique(wash_stool$menage_id))
+length(unique(wash_hh_stool$menage_id[wash_hh_stool$round=="baseline"])) #266
+length(unique(wash_hh_stool$menage_id[wash_hh_stool$round=="post"])) # 258
+
+# Ensure only one observation per hh (currently at individual level for wash + stool)
 indicators <- c(
-  "safe_dry","safe_rainy","clean_storage","correct_hw","improved_san",
-  "no_livestock_in_house","no_animal_excrement_on_floor"
+  "main.drinking.water.dry.binary","main.drinking.water.rainy.binary","no.cleaning.water.storage.binary",
+  "no.correct.handwashing.binary","no.improved.sanitation.binary",
+  "livestock.access.house.binary","animal.excrement.floor.binary"
 )
+
+length(unique(wash_hh_all$menage_id))
+length(unique(wash_hh_all$menage_id[wash_hh_all$round=="post"]))
 
 # -------------------------------------------------------------------------------
 # HH weights for SURVEY (population / sampled HHs in each village-round)
 # -------------------------------------------------------------------------------
+
+# Compute population-based survey weights:
+# Each household gets a weight = village population / number of sampled households
+# so that results are more representative of the true population.
+# Larger villages thus contribute proportionally more, even if all have equal sample sizes.
+
+# Extract the total population per village from the WASH dataset
 pop_nm_wash  <- pick_col(wash,  c("n.population"))
+
+# Create a reference table: one row per village with its total population
 pop_ref <- wash_hh_all %>% select(c(village, n.population)) %>% unique()
 
-# Number of households per village per round
+# Number of sampled households per village per round
 n_hh_vr <- wash_hh_all %>% count(village, round, name = "n_hh_round")
 
+# Combine population and sample counts to compute survey weights
 weights_hh <- n_hh_vr %>%
   left_join(pop_ref, by = "village") %>%
   mutate(weight = ifelse(is.na(n.population), 1, n.population / pmax(n_hh_round, 1)))
 
+# Merge weights back into the main household- and stool-level datasets
 wash_hh_all   <- wash_hh_all   %>% left_join(weights_hh)
 wash_hh_stool <- wash_hh_stool %>% left_join(weights_hh %>% select(village, round, weight))
 
+# Normalise the weights
 norm_w <- function(w) w / mean(w, na.rm = TRUE)
 wash_hh_all$weight   <- ifelse(is.na(wash_hh_all$weight),   1, norm_w(wash_hh_all$weight))
 wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_stool$weight))
+
+# CHECK DIFFERENCE IN RAINY VS DRY 
+#--------------------------------------------------------------------------------
+
+table(wash_hh_all$rainy, wash_hh_all$round, useNA="always") # The second round is not in the rainy season at all
+table(wash_hh_all$rainy, wash_hh_all$arm, useNA="always") # 249/(249+160) = 61% of control group in rainy season; 189/(189+210) this was 47% for the intervention group
+
+table(wash_hh_all$rainy, wash_hh_all$round, wash_hh_all$animal.excrement.floor.binary)
 
 # -------------------------------------------------------------------------------
 # SURVEY-WEIGHTED WASH change (ALL HH): arm × round prevalences + DiD PR
@@ -137,7 +203,7 @@ wash_hh_stool$weight <- ifelse(is.na(wash_hh_stool$weight), 1, norm_w(wash_hh_st
 # !!! USE ALL DATA (wash_hh_all) OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED (wash_hh_stool) !!!
 
 # Below is with all hh data, have for now run it twice, changing the dataset to wash_hh_stool and store seperately to get the two tables stored
-wash_long_all <- wash_hh_all %>%
+wash_long_all <- wash_hh_stool%>%
   pivot_longer(all_of(indicators), names_to = "indicator", values_to = "y") %>%
   mutate(
     y = as.numeric(y),
@@ -145,34 +211,35 @@ wash_long_all <- wash_hh_all %>%
     arm = factor(arm, levels = c("control","intervention")),
     round = factor(round, levels = c("baseline","post"))
   )
-
+ 
 inds <- sort(unique(as.character(wash_long_all$indicator)))
 
 # Function to fit model and extract summary table for each indicator
 # -------------------------------------------------------------------
 
+
 fit_one_indicator <- function(ind) {
   print(ind)
-  d <- wash_long_all %>% filter(indicator == ind)
+  d <- wash_long_all %>% filter(indicator == ind) 
   # Fit survey-weighted log-binomial model
   des <- svydesign(
-    id = ~village + menage_id,
+    id = ~village,
     weights = ~weight,
     data = d,
     nest = TRUE
   )
   
   # Regression model accounting for survey design and seasonality
-  fit <- svyglm(y ~ arm * round + rainy,
+  fit <- svyglm(y ~ arm * round + rainy, # + rainy, can not account for rainy season as is date is mssing in the last round
                 design = des,
                 family = quasipoisson(link = "log"))
   
   # Predicted adjusted prevalences (for rainy season)
-  # adjusted prevalences (set rainy = 1, this as most surveys were taken in the rainy season so most representative)
+  # adjusted prevalences (set rainy = 0, this as most surveys were taken in the rainy season so most representative)
   newdat <- expand.grid(
     arm   = levels(d$arm),
     round = levels(d$round),
-    rainy = 1
+    rainy = 0
   )
   pred <- as.data.frame(predict(fit, newdata = newdat, type = "response", se.fit = TRUE))
   
@@ -197,7 +264,7 @@ fit_one_indicator <- function(ind) {
   newdat_post <- expand.grid(
     arm   = c("control","intervention"),
     round = "post",
-    rainy = 1
+    rainy = 0
   )
   # Factors with the same levels as used in the model
   newdat_post$arm   <- factor(newdat_post$arm,   levels = levels(d$arm))
@@ -207,21 +274,23 @@ fit_one_indicator <- function(ind) {
   pred_post <- as.data.frame(predict(fit, newdata = newdat_post, type = "link", se.fit = TRUE))
   
   X <- model.matrix(~ arm * round + rainy, newdat_post)
+  #X <- model.matrix(~ arm * round, newdat_post)
   
+  # Concluded that the post only PR is not meaningfull in our context, as the baseline differences between the groups are quite high, so report the DiD only
   # log(PR) = eta_int - eta_ctrl ; Var = (x2-x1)' V (x2-x1)
   var_est <- vcov(fit)
   diff_x <- X[2,] - X[1,]
   log_pr <- sum(diff_x * coef(fit))
   se_log_pr <- as.numeric(sqrt(t(diff_x) %*% var_est %*% diff_x))
-  pr_baseline_adj <- exp(log_pr)
+  pr_post_only <- exp(log_pr)
   ci_low  <- exp(log_pr - 1.96 * se_log_pr)
   ci_high <- exp(log_pr + 1.96 * se_log_pr)
-  baseline_adj_pr <- sprintf("%.2f (%.2f–%.2f)", pr_baseline_adj, ci_low, ci_high)
+  post_only_pr <- sprintf("%.2f (%.2f–%.2f)", pr_post_only, ci_low, ci_high)
   
   newdat %>%
     mutate(
       indicator = ind,
-      `Baseline-adjusted PR` = baseline_adj_pr,
+      `Post-only PR` = post_only_pr,
       `Difference-in-differences PR` = did_effect
     ) %>%
     select(
@@ -230,7 +299,7 @@ fit_one_indicator <- function(ind) {
       Baseline_Intervention  = baseline_intervention,
       Post_Control           = post_control,
       Post_Intervention      = post_intervention,
-      `Baseline-adjusted PR`,
+      `Post-only PR`,
       `Difference-in-differences PR`
     )
 }
@@ -247,19 +316,19 @@ results_table <- map_dfr(inds, fit_one_indicator)
 
 results_table <- results_table %>%
   rename(`Practice/condition` = indicator,
-         `Prevalence ratio (baseline-adjusted)` =  `Baseline-adjusted PR`,
+         `Prevalence ratio (Post-only)` =  `Post-only PR`,
          `Prevalence ratio (did)` =  `Difference-in-differences PR`) %>%
   mutate(`Practice/condition` = forcats::fct_recode(`Practice/condition`,
-                                                    "Access to safe drinking water (dry season)" = "safe_dry",
-                                                    "Access to safe drinking water (rainy season)" = "safe_rainy",
-                                                    "Cleaning drinking water storage containers before reuse" = "clean_storage",
-                                                    "Correct handwashing" = "correct_hw",
-                                                    "Using improved sanitary facility" = "improved_san",
-                                                    "Livestock animals access the house" = "no_livestock_in_house",
-                                                    "Animal excrement on the house floor" = "no_animal_excrement_on_floor"
+                                                    "Use of unimproved drinking water source (dry)" = "main.drinking.water.dry.binary",
+                                                    "Use of unimproved drinking water source (rainy)" = "main.drinking.water.rainy.binary",
+                                                    "No cleaning of drinking water storage containers" = "no.cleaning.water.storage.binary",
+                                                    "Incorrect handwashing" = "no.correct.handwashing.binary",
+                                                    "Use of unimproved sanitary facility" = "no.improved.sanitation.binary",
+                                                    "Livestock animals access the house" = "livestock.access.house.binary",
+                                                    "Animal excrement on the house floor" = "animal.excrement.floor.binary"
   )) 
 
-results_table = results_table[c(6,7,1,2,3,4,5),]
+results_table = results_table[c(3,4,5,6,7,1,2),]
 
 # View final table
 results_table
@@ -269,3 +338,6 @@ write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_chan
 
 # STORE OUTPUT FOR SI - STOOL ONLY
 write_xlsx(results_table, path = "./Output/Figures_and_tables/Paper/TableS3_change_wash_STOOL_hh.xlsx")
+
+# Descriptive table WASH
+#table(wash_hh_all$no_animal_excrement_on_floor[wash_hh_all$round=="baseline"],wash_hh_all$arm[wash_hh_all$round=="baseline"])

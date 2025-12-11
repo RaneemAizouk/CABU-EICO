@@ -4,7 +4,7 @@
 # This code is cleaning the household WASH survey data 
 
 # Date created: 16 March 2025
-# Date last updated: 30 September 2025
+# Date last updated: 11 December 2025
 # Author: Esther van Kleef
 
 # The CABU-EICO household data contains questions from three surveys
@@ -1395,9 +1395,14 @@ write.csv(checkses, paste0(DirectoryDataOut, "./need_checking/ses_pella_ids_to_c
 # Total number of individuals in cohort
 length(unique(dfls0$menage_id_member)) # 1236
 
-# Number of individuals per intervention group (617 and 619 control/intervention groups)
+# Number of individuals per intervention group (617 and 619 control/intervention groups overall)
 dfls0 %>%
   group_by(intervention.text) %>%
+  summarise(n_unique_menage = n_distinct(menage_id_member), .groups = "drop")
+
+# Number of participants per round
+dfls0 %>%
+  group_by(intervention.text, redcap_event_name) %>%
   summarise(n_unique_menage = n_distinct(menage_id_member), .groups = "drop")
 
 # Number of households per intervention group (134 control; 132 intervention)
@@ -1456,12 +1461,18 @@ print(paste("Number of individuals after filling missing age and sexe:", num_ind
 
 unique(data_filled$sexe)  # Should print only 0 and 1
 
-# After removal of missing age and sex
+length(data_filled$menage_id_member) # 4163
+length(dfls0$menage_id_member) # 4195 
+length(dfls0$menage_id_member)-length(data_filled$menage_id_member) # 32 stool samples excluded
+
+length(unique(dfls0$menage_id_member))-length(unique(data_filled$menage_id_member)) # 16 participants excluded
+
+# After removal of missing age and sex - number of stool samples per round used in analyses
 data_filled %>%
   group_by(intervention.text, redcap_event_name) %>%
   summarise(n_unique_menage = n_distinct(menage_id_member), .groups = "drop")
 
-# Number of households per intervention group (134 control; 130 intervention)
+# Number of households per intervention group (134 control; 130 intervention) in analyses
 data_filled %>%
   group_by(intervention.text) %>%
   summarise(n_unique_menage = n_distinct(menage_id), .groups = "drop")
@@ -1474,6 +1485,9 @@ data_filled %>%
 data_filled %>%
   group_by(redcap_event_name) %>%
   summarise(n_unique_menage = n_distinct(menage_id_member), .groups = "drop")
+
+data_filled %>% group_by(intervention.text, redcap_event_name, esble) %>%
+  summarise(n())
 
 # Now for household survey
 d_wash_b %>%

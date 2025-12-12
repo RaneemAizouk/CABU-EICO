@@ -21,7 +21,7 @@ pacman::p_load(
 # ----------------------------
 # Where the fitted stan objects live (as .rds)
 dir_sim  <- "Simulated_data"
-dir_obs  <- "Observed_data"      # <-- your script uses this for figures/output directories
+dir_obs  <- "Observed_data"      
 dir_fits <- "./Output/Model_results"
 
 # ----------------------------

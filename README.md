@@ -1,6 +1,7 @@
 # Project summary
 We evaluated a community-based behavioural intervention designed to reduce household transmission of antimicrobial-resistant bacteria by targeting inappropriate antibiotic use and hygiene practices. Following a six-month co-development phase, the intervention was implemented in 22 village clusters in rural Nanoro, Burkina Faso, with households followed longitudinally through repeated stool sampling and WASH surveys. ESBL-producing E. coli acquisition and clearance were analysed using Bayesian continuous-time multi-state (Markov) models and complementary Cox mixed-effects models accounting for household clustering and seasonality. This repository contains the full data-processing and analysis pipeline supporting one of the first quantitative estimates of community-level AMR transmission and intervention effects in rural sub-Saharan Africa.
-**Different databases:** 
+
+# Different databases:
 
 Burkina Faso
   1) bf_esbl0123_long_all.rda                 = Cleaned feacal sample dataset linked with households survey containing the observations of all individiuals

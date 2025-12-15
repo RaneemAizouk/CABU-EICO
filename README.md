@@ -1,3 +1,5 @@
+# Project summary
+We evaluated a community-based behavioural intervention designed to reduce household transmission of antimicrobial-resistant bacteria by targeting inappropriate antibiotic use and hygiene practices. Following a six-month co-development phase, the intervention was implemented in 22 village clusters in rural Nanoro, Burkina Faso, with households followed longitudinally through repeated stool sampling and WASH surveys. ESBL-producing E. coli acquisition and clearance were analysed using Bayesian continuous-time multi-state (Markov) models and complementary Cox mixed-effects models accounting for household clustering and seasonality. This repository contains the full data-processing and analysis pipeline supporting one of the first quantitative estimates of community-level AMR transmission and intervention effects in rural sub-Saharan Africa.
 **Different databases:** 
 
 Burkina Faso
@@ -7,25 +9,30 @@ Burkina Faso
   4) Household_stool_WASH_BF.csv              = Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken
   
      
-**Different scripts (script folder):**
-1) data_set_preparation_spline.R            = Script that converts the stool sampling data in a stan format for the markov model
-2) scenario_fit_comparison.R                = Script that compares fit across the different intervention scenarios. Can be used for observed and simulated data
-3) descriptive_WASH.R                       = Script that cleans and describes the households survey results, both at individual and household level
-4) model_output_summary.R                   = Script that summarises the main model output. Can be used for all intervention scenarios
-5) CoxModel_WASH.R                          = Script that fits a Cox proportional hazard model to the complete stool sampling data (i.e. of those with four observations)
-5) analyses_change_WASH.R                   = Script that estimates the change in WASH indicators
-6) figures_and_tables.R                     = Script that develops the manuscript figures and tables
 
 **Other (Documentation folder):**
 1) Interpretation antibiogramme des isolats PORTAGE asymptomatique_ESBL_E. coliKlebsielle.docx
-**Data Analysis scripts:**
-1. "/0_clean_and_describe_hh_survey.R" is code to  clean the household WASH survey data 
-2. "/0_data_prep_markov_model.R" is code convert the observed datat in CABU-EICO study to a stan data format 
-3. "1_descriptive_WASH.R" is code to 
-4. "2_scenario_fit_comparison.R"
-5. "3_model_output_summary.R"
-6. "4_analyses_change_WASH.R"
-7. "5_Data_prep_coxme.R" is code to prepare longitudinal stool sampling and household survey data for
-    Cox mixed-effects modeling (`coxme`)
-8. "5_CoxModel_WASH.R" is code to fit Cox proportional hazards mixed-effects models (`coxme`) to estimate associations between household WASH     indicators and ESBL-E acquisition using longitudinal stool sampling data.
-9. "6_figures_and_tables.R"
+# Data analysis scripts
+# 1)  0_clean_and_describe_hh_survey.R
+Cleans and harmonises raw household survey, WASH, SES, and stool-collection data from the CABU-EICO study. This script resolves identifier mismatches between laboratory and household datasets, derives binary WASH indicators, links individuals to household- and village-level information, constructs cleaned longitudinal datasets, and exports analysis-ready CSV and RDA files used by downstream descriptive, Markov, and Cox modeling analyses.
+# 2)  0_data_prep_markov_model.R
+Prepares cleaned CABU-EICO longitudinal data for continuous-time multi-state (Markov) modeling in Stan. This script converts observed individual-level stool sampling data into Stan-compatible data structures, including time indexing, state definitions, and covariate matrices, and saves the resulting objects for use in Bayesian model fitting.
+# 3)  1_descriptive_WASH.R
+Produces descriptive tables and figures summarising household WASH indicators and ESBL-E prevalence across survey rounds, households, and villages. Outputs include baseline and post-intervention summaries, prevalence distributions, and visualisations used for exploratory analysis and reporting.
+# 4)  2_scenario_fit_comparison.R
+Loads fitted Stan model objects (observed and/or simulated), computes model diagnostics (including LOO, R-hat, and divergence statistics), compares model fit across intervention and seasonality scenarios, summarises intervention effects as hazard ratios with credible intervals, and generates publication-ready comparison tables and plots.
+# 5)  3_model_output_summary.R
+Generates diagnostic summaries and visualisations from a fitted Stan model, including traceplots, NUTS sampler diagnostics, seasonal effect curves (sine or spline), posterior rate summaries, and difference-in-differences estimates. This script produces tables and figures used to interpret and validate model behaviour.
+# 6)  4_analyses_change_WASH.R
+Estimates and visualises changes in household WASH indicators over time and between intervention arms. The script quantifies pre- and post-intervention differences and produces figures and tables used to assess intervention effects on WASH practices.
+# 7)  5_Data_prep_coxme.R
+Prepares longitudinal stool sampling and household survey data for Cox proportional hazards mixed-effects modeling (coxme). This script defines ESBL-E acquisition events, constructs start–stop time intervals, applies midpoint imputation of event times, harmonises time-varying WASH covariates, and produces anonymised and internal datasets for Cox regression analyses.
+# 8)  5_CoxModel_WASH.R
+Fits Cox proportional hazards mixed-effects models (coxme) to estimate associations between household WASH indicators and ESBL-E acquisition. Models include random effects for individuals and households and use midpoint-imputed event times generated by 5_Data_prep_coxme.R.
+# 9)  6_figures_and_tables.R
+Assembles final manuscript-ready figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. This script standardises visual formatting and exports high-resolution figures and tables for reporting and publication.
+# Related publications
+1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
+2) The effect of a community-based intervention bundle on household transmission of Extended Spectrum Beta-lactamase-producing E. coli in rural Burkina Faso - a cluster randomised trial (To be added)
+
+

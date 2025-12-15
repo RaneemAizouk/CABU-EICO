@@ -2,6 +2,7 @@
 # THIS CODE CONVERTS THE OBSERVED DATA IN THE CABU EICO STUDY TO A STAN DATA FORMAT
 ####################################################################################
 
+# Last updated: 15 December 2025
 
 # Clear environment
 rm(list = ls())
@@ -13,81 +14,218 @@ pacman::p_load(ggplot2, rstan, tidyr, bayesplot, gridExtra, dplyr, GGally, lubri
 # load dataset
 #----------------------------------------------------------------------
 
-#load("/Users/raizouk/Desktop/Oxford/Projects/data_set/bf_esbl0123_long_all.rda")
-#load("/Users/raizouk/Desktop/bf_esbl0123_long_all.rda")
-load("./Data/BF/clean/use_in_analyses/bf_esbl0123_long_all.rda")
-
-data <- dfls0
-#print(ls())
-
-#setwd("/Users/raizouk/Desktop/")
-timing_interventions <- read.csv("./Data/BF/timing_interventions.csv")
-
-# Check
-head(timing_interventions)
+#load("./Data/BF/clean/use_in_analyses/bf_esbl0123_long_all.rda")
+#timing_interventions <- read.csv("./Data/BF/timing_interventions.csv")
 
 #----------------------------------------------------------------------
 # Data pre-processing 
 #----------------------------------------------------------------------
 
+# Lines 37-230 have been used to anonimise the data for publication therefore are canceled out
+#------------------------------------------------------------------------------------------------
+
+
 # Create an explicit "observed_state" variable from the original carriage indicator
 # This makes it easier to recode or rename later without touching the raw "esble" column.
-data$observed_state <- data$esble
-data <- data %>%
-  relocate(observed_state, .after = esble)
+# data$observed_state <- data$esble
+# data <- data %>%
+#   relocate(observed_state, .after = esble)
+# 
+# # Assign each household a unique integer ID
+# # factor() converts the string menage_id into a factor with levels in the order encountered,
+# # and as.numeric() then maps those levels 1,2,3,… to the HouseID column.
+# data$HouseID <- as.numeric(factor(data$menage_id))
+# data <- data %>%
+#   relocate(HouseID, .after = menage_id)
+# 
+# # Extract each person’s within-household number from menage_id_member
+# # The pattern ".*-" strips off everything up to the dash, leaving the numeric suffix.
+# data$individual_number <- as.numeric(sub(".*-", "", data$menage_id_member))
+# 
+# # Combine HouseID and individual_number into a single integer identifier:
+# # multiply HouseID by 100 (reserving two digits) then add the individual number.
+# # For example, HouseID=1 & individual_number=5 → 100*1 + 5 = 105
+# multiplier <- 100
+# data$menage_id_member_orig <- data$menage_id_member
+# data$menage_id_member <- data$HouseID * multiplier + data$individual_number
+# 
+# # Parse the survey round from the RedCap event name
+# # Extract the number after "round_" and before "_arm_1", then add 1 so that "round_1" → 2, etc.
+# data$round <- as.integer(
+#   gsub("round_(\\d+)_arm_1", "\\1", data$redcap_event_name)
+# ) + 1
+# 
+# data <- data %>%
+#   relocate(round, .after = redcap_event_name)
+# 
+# # store dataset for publication
+# dpub <- data[, c(1:38)]
+# 
+# names(dpub)
+# 
+# dpub2 <- dpub %>% select(!c(redcap_event_name,time, menage_id, date.consent,date.stool.collection, date, date_conserv, germe_c, data.row,date.enquete,
+#                             cleaning.water.storage.binary))
+# 
+# 
+# #----------------------------------------------------------------------
+# # Add intervention date
+# #----------------------------------------------------------------------
+# 
+# # Clean and prepare timing_interventions
+# timing_interventions <- timing_interventions %>%
+#   mutate(
+#     village_name = tolower(trimws(Village_name)),
+#     Intervention_round = as.integer(Round),
+#     Intervention_start_date = dmy(Intervention_start_date)  # handles dd/mm/yyyy safely
+#   ) %>%
+#   #mutate(data_round = Round + 1) %>%  # shift rounds by +1 to match data_complete
+#   select(village_name, Intervention_round, Intervention_start_date)
+# 
+# # make wide
+# timing_interventions_wide <- timing_interventions %>%
+#   pivot_wider(
+#     id_cols = village_name,
+#     names_from = Intervention_round,
+#     values_from = Intervention_start_date,
+#     names_prefix = "intervention_round"
+#   )
+# 
+# # Clean and prepare data_complete
+# dpub2 <- dpub2 %>%
+#   mutate(
+#     village_name = tolower(trimws(village_name)),
+#     round = as.integer(round)
+#   )
+# unique(dpub2$village_name)
+# unique(timing_interventions$village_name)
+# 
+# 
+# # Join intervention dates to data_complete by village and adjusted round
+# dpub2 <- dpub2 %>%
+#   left_join(
+#     timing_interventions_wide,
+#     by = c("village_name" = "village_name")
+#   )
+# 
+# table(dpub2$intervention_round1[dpub2$intervention.text==1], useNA="always") # no NAs
+# 
+# # Fill Intervention_start_date with first intervention round start
+# dpub2 <- dpub2 %>%
+#   mutate(
+#     Intervention_start_date = intervention_round1,
+#     intervention_date = intervention_round1, # in the baseline scenario, we assume intervention rounds 1+2 have the same effect and intervention round 3 has an additional effect
+#     intervention_date2 = intervention_round3 #
+#   )
+# 
+# 
+# # Relocate the column after 'round'
+# dpub2 <- dpub2 %>%
+#   relocate(Intervention_start_date, intervention_date, intervention_date2, .after = round)
+# 
+# # Check the result
+# dpub2 %>%
+#   select(menage_id_member, round, Intervention_start_date, intervention_date, intervention_date2) %>%
+#   distinct() %>%
+#   head(10)
+# 
+# sum(is.na(dpub2$intervention_date2))
+# sum(is.na(dpub2$Intervention_start_date))
+# class(dpub2$intervention_date)
+# class(dpub2$intervention_date2)
+# 
+# unique(dpub2$intervention_date)
+# unique(dpub2$intervention_date2)
+# 
+# # fill Na values in the intervention date  for control group with date after the study
+# #------------------------------------------------------------------------------
+# # 1) Compute the last sampling date across everyone:
+# # 1) Compute the last sampling date across all observations:
+# max_obs_date <- max(dpub2$date.use, na.rm = TRUE)
+# 
+# interval_length <- 28
+# 
+# # 2) Fill NA in intervention_date and intervention_date2 (both are Date already):
+# dpub2 <- dpub2 %>%
+#   mutate(
+#     intervention_date  = if_else(
+#       is.na(intervention_date),
+#       max_obs_date + interval_length,
+#       intervention_date
+#     ),
+#     intervention_date2 = if_else(
+#       is.na(intervention_date2),
+#       max_obs_date + interval_length,
+#       intervention_date2
+#     ),
+#     Intervention_start_date = intervention_date
+#   ) %>%
+#   # 3) Sanity‐check: no NAs should remain
+#   { stopifnot(!any(is.na(.$intervention_date))); . } %>%
+#   { stopifnot(!any(is.na(.$intervention_date2))); . } #%>%
+#   # 4) Convert back to numeric days‐since‐1970 for Stan
+#   #mutate(
+#   #  intervention_date  = as.numeric(intervention_date),
+#   #  intervention_date2 = as.numeric(intervention_date2)
+#   #)
+# 
+# sum(is.na(dpub2$intervention_date))    # should print 0
+# sum(is.na(dpub2$intervention_date2))   # should print 0
+# sum(is.na(dpub2$Intervention_start_date))  # should print 0
+# 
+# 
+# # Get unique villages
+# villages <- unique(dpub2$village_name)
+# 
+# # Sort alphabetically (ignore case)
+# villages_sorted <- sort(villages)
+# 
+# # Create numeric codes 1:22
+# village_codes <- setNames(seq_along(villages_sorted), villages_sorted)
+# 
+# # Recode into a new variable
+# dpub2$village_code <- village_codes[dpub2$village_name]
+# 
+# 
+# dpub3 <- dpub2 %>% select(-c(village, village_name))
+# #data <- data[,c(1:31,113:116)]
+# #names(data)
+# 
+# data = dpub3
+# 
+# #-----------------------------------------------------------------------
+# # Convert variables to binary
+# #-----------------------------------------------------------------------
+# 
+# # Create a binary variable for intervention villages with date condition
+# data <- data %>%
+#   mutate(
+#     intervention_village = case_when(
+#       intervention.text == "intervention"  ~ 1,
+#       TRUE ~ 0
+#     )
+#   )
+# 
+# # Convert sexe and esble =observed_state to binary 0,1 for male and female respectively.
+# # First, ensure 'sexe' is a character type
+# data$sexe <- as.character(data$sexe)
+# 
+# # Now, correctly convert 'sexe' to binary (1 = Female, 0 = Male)
+# data$sexe <- ifelse(data$sexe == "Female", 1, 0)
+# 
+# # Confirm conversion worked
+# unique(data$sexe)
+# 
+# dfls0 = data
+# 
+# # Store data for paper
+# saveRDS(dfls0, file="./Data/Manuscript/bf_esbl0123_long_all.rds")
+# write.csv(dfls0, "./Data/Manuscript/bf_esbl0123_long_all.csv")
 
-# Assign each household a unique integer ID
-# factor() converts the string menage_id into a factor with levels in the order encountered,
-# and as.numeric() then maps those levels 1,2,3,… to the HouseID column.
-data$HouseID <- as.numeric(factor(data$menage_id))
-data <- data %>%
-  relocate(HouseID, .after = menage_id)
 
-# Extract each person’s within-household number from menage_id_member
-# The pattern ".*-" strips off everything up to the dash, leaving the numeric suffix.
-data$individual_number <- as.numeric(sub(".*-", "", data$menage_id_member))
+# LOAD IN DATA
+#----------------------------------------------------------------------
 
-# Combine HouseID and individual_number into a single integer identifier:
-# multiply HouseID by 100 (reserving two digits) then add the individual number.
-# For example, HouseID=1 & individual_number=5 → 100*1 + 5 = 105
-multiplier <- 100
-data$menage_id_member_orig <- data$menage_id_member
-data$menage_id_member <- data$HouseID * multiplier + data$individual_number
-
-# Parse the survey round from the RedCap event name
-# Extract the number after "round_" and before "_arm_1", then add 1 so that "round_1" → 2, etc.
-data$round <- as.integer(
-  gsub("round_(\\d+)_arm_1", "\\1", data$redcap_event_name)
-) + 1
-
-data <- data %>%
-  relocate(round, .after = redcap_event_name)
-
-data <- data[,c(1:31,113:116)]
-names(data)
-
-#-----------------------------------------------------------------------
-# Convert variables to binary
-#-----------------------------------------------------------------------
-
-# Create a binary variable for intervention villages with date condition
-data <- data %>%
-  mutate(
-    intervention_village = case_when(
-      intervention.text == "intervention"  ~ 1,
-      TRUE ~ 0
-    )
-  )
-
-# Convert sexe and esble =observed_state to binary 0,1 for male and female respectively.
-# First, ensure 'sexe' is a character type
-data$sexe <- as.character(data$sexe)
-
-# Now, correctly convert 'sexe' to binary (1 = Female, 0 = Male)
-data$sexe <- ifelse(data$sexe == "Female", 1, 0)
-
-# Confirm conversion worked
-unique(data$sexe)  
+data = readRDS("./Data/Manuscript/bf_esbl0123_long_all.rds")
 
 #----------------------------------------------------------------------
 # Handle missing data
@@ -246,10 +384,8 @@ data_complete  <- data_complete %>%
   mutate(
     state_prev = lag(observed_state),
     state_next = observed_state
-  ) #%>%
-  #filter(!is.na(state_prev) & !is.na(state_next)) %>%
-  #ungroup()
-
+  ) 
+  
 
 
 ##########################################################
@@ -259,6 +395,7 @@ data_complete  <- data_complete %>%
 #  Scales time (X) to years, centered at the median.
 #  Sets up 5 knots for cubic B-splines (spline_degree = 3).
 
+ 
 # Define global interval structure
 global_interval_start <- min(data_complete$date.use) # start date of the study 03-10-2022
 global_interval_end <- max(data_complete$date.use) # end date of the study 19-02-2024
@@ -317,111 +454,6 @@ num_basis <- num_knots + spline_degree - 1  # Correctly computed basis functions
 # Print to verify
 print(knots)
 print(num_basis) # 7
-
-
-#----------------------------------------------------------------------
-# Add intervention date 
-#----------------------------------------------------------------------
-
-# Clean and prepare timing_interventions
-timing_interventions <- timing_interventions %>%
-  mutate(
-    village_name = tolower(trimws(Village_name)),
-    Intervention_round = as.integer(Round),
-    Intervention_start_date = dmy(Intervention_start_date)  # handles dd/mm/yyyy safely
-  ) %>%
-  #mutate(data_round = Round + 1) %>%  # shift rounds by +1 to match data_complete
-  select(village_name, Intervention_round, Intervention_start_date)
-
-# make wide
-timing_interventions_wide <- timing_interventions %>%
-  pivot_wider(
-    id_cols = village_name,
-    names_from = Intervention_round,
-    values_from = Intervention_start_date,
-    names_prefix = "intervention_round"
-  )
-
-# Clean and prepare data_complete
-data_complete <- data_complete %>%
-  mutate(
-    village_name = tolower(trimws(village_name)),
-    round = as.integer(round)
-  )
-unique(data_complete$village_name)
-unique(timing_interventions$village_name)
-
-
-# Join intervention dates to data_complete by village and adjusted round
-data_complete <- data_complete %>%
-  left_join(
-    timing_interventions_wide,
-    by = c("village_name" = "village_name")
-  )
-
-table(data_complete$intervention_round1[data_complete$intervention_village==1], useNA="always") # no NAs
-
-# Fill Intervention_start_date with first intervention round start
-data_complete <- data_complete %>%
-  mutate(
-    Intervention_start_date = intervention_round1,
-    intervention_date = intervention_round1, # in the baseline scenario, we assume intervention rounds 1+2 have the same effect and intervention round 3 has an additional effect 
-    intervention_date2 = intervention_round3 # 
-  )
-
-# Relocate the column after 'round'
-data_complete <- data_complete %>%
-  relocate(Intervention_start_date, intervention_date, intervention_date2, .after = round)
-
-# Check the result
-data_complete %>%
-  select(menage_id_member, round, Intervention_start_date, intervention_date, intervention_date2) %>%
-  distinct() %>%
-  head(10)
-
-sum(is.na(data_complete$intervention_date2))
-sum(is.na(data_complete$Intervention_start_date))
-class(data_complete$intervention_date)
-class(data_complete$intervention_date2)
-
-unique(data_complete$intervention_date)
-unique(data_complete$intervention_date2)
-
-
-# fill Na values in the intervention date  for control group with date after the study
-#------------------------------------------------------------------------------
-# 1) Compute the last sampling date across everyone:
-# 1) Compute the last sampling date across all observations:
-max_obs_date <- max(data_complete$date.use, na.rm = TRUE)
-
-# 2) Fill NA in intervention_date and intervention_date2 (both are Date already):
-data_complete <- data_complete %>%
-  mutate(
-    intervention_date  = if_else(
-      is.na(intervention_date),
-      max_obs_date + interval_length,
-      intervention_date
-    ),
-    intervention_date2 = if_else(
-      is.na(intervention_date2),
-      max_obs_date + interval_length,
-      intervention_date2
-    ),
-    Intervention_start_date = intervention_date
-  ) %>%
-  # 3) Sanity‐check: no NAs should remain
-  { stopifnot(!any(is.na(.$intervention_date))); . } %>%
-  { stopifnot(!any(is.na(.$intervention_date2))); . } %>%
-  # 4) Convert back to numeric days‐since‐1970 for Stan
-  mutate(
-    intervention_date  = as.numeric(intervention_date),
-    intervention_date2 = as.numeric(intervention_date2)
-  )
-
-sum(is.na(data_complete$intervention_date))    # should print 0
-sum(is.na(data_complete$intervention_date2))   # should print 0
-sum(is.na(data_complete$Intervention_start_date))  # should print 0
-
 
 #-------------------------------------------------------------------
 # Conversion to stan units 
@@ -642,7 +674,7 @@ for (i in seq_len(n_check)) {
   }
 }
 
-write.csv(diagnostic_table, "./Data/BF/clean/use_in_analyses/bf_check_stan_data.csv")
+#write.csv(diagnostic_table, "./Data/BF/clean/use_in_analyses/bf_check_stan_data.csv")
 
 print(diagnostic_table[c(1:20),])
 
@@ -655,7 +687,8 @@ stan_data <- list(
   N = nrow(data_complete),
   menage_id_member = data_complete$menage_id_member,
   HouseID = data_complete$HouseID,
-  VillageID = data_complete$village_name,
+  #VillageID = data_complete$village_name,
+  VillageID = data_complete$village_code,
   H = length(unique(data_complete$HouseID)),
   age = as.integer(data_complete$age),
   round = as.integer(data_complete$round),
@@ -666,7 +699,7 @@ stan_data <- list(
   intervention = as.integer(data_complete$intervention_village),
   Intervention_start_date = as.numeric(data_complete$Intervention_start_date),
   intervention_date  = as.numeric(data_complete$intervention_date),
-  intervention_date2 = data_complete$intervention_date2,
+  intervention_date2 = as.numeric(data_complete$intervention_date2),
   
   # Interval length and date range
   global_interval_start = global_interval_start_numeric,
@@ -702,5 +735,8 @@ str(stan_data)
 # Save data
 #-------------------------------------------------------------
 
-saveRDS(stan_data, file="./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
-write.csv(data_complete, file = "./Data/BF/clean/use_in_analyses/bf_df_model_all.csv")
+# saveRDS(stan_data, file="./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
+# write.csv(data_complete, file = "./Data/BF/clean/use_in_analyses/bf_df_model_all.csv")
+
+saveRDS(stan_data, file="./Data/Manuscript/bf_stan_data_all.rds")
+#write.csv(data_complete, file = "./Data/BF/clean/use_in_analyses/bf_df_model_all.csv")

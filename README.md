@@ -20,8 +20,8 @@ Burkina Faso
 1) Interpretation antibiogramme des isolats PORTAGE asymptomatique_ESBL_E. coliKlebsielle.docx
 **Data Analysis scripts:**
 1. "/0_clean_and_describe_hh_survey.R" is code to  clean the household WASH survey data 
-2. "/0_data_prep_markov_model.R" is code to
-3. "1_descriptive_WASH.R"
+2. "/0_data_prep_markov_model.R" is code convert the observed datat in CABU-EICO study to a stan data format 
+3. "1_descriptive_WASH.R" is code to 
 4. "2_scenario_fit_comparison.R"
 5. "3_model_output_summary.R"
 6. "4_analyses_change_WASH.R"

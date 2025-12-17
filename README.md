@@ -24,7 +24,7 @@ This folder contains the simulated household survey and stool collection data
 ## Observed data
 This folder contains the cleaned and anonymised household survey and stool collection dataframes available on this repository and used for data analyses
 
-  1) "/Public_data/Observed/bf_esbl0123_long_all.rds"                 : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals.
+  1) "/Public_data/Observed/bf_esbl0123_long_all.rds"                 : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individuals.
   2) "/Public_data/Observed/bf_esbl0123_long_completecases.rds"       : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals with four observations (complete follow up).
   3) "/Public_data/Observed/Household_WASH_BF.csv"                    : Cleaned and anonymised CABU-EICO household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken.
   4) "/Public_data/Observed_data/Household_stool_WASH_BF.csv"              : Cleaned and anonymised CABU-EICO Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken.

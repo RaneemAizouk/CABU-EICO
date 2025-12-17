@@ -23,30 +23,30 @@ The *secondary outcomes*  are the changes in AMR acquisition dynamics and hygien
   3) "/Public_data/Observed/Household_WASH_BF.csv"                    : Cleaned and anonymised CABU-EICO household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken.
   4) "/Public_data/Observed_data/Household_stool_WASH_BF.csv"              : Cleaned and anonymised CABU-EICO Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken.
   
-# Scripts to generate simulated data
+# Generate simulated data scripts
 1) "Scripts/0_create_simulated_data_no_seasonality.R": Generates a simulated dataset without a seasonal pattern in ESBL-E acquisition
 2)  "Scripts/0_create_simulated_data_seasonality.R": Generates a simulated dataset a seasonal pattern in ESBL-E acquisition
    
-# Scripts to clean CABU-EICO household survey and stool collection data  
+# Data cleaning scripts   
 These R scripts clean and generate the publicly available anonymized dataframes available on this repository.
 
  1)  "/Scripts/1_clean_and_describe_hh_survey.R": Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
  2)  "/Scripts/1_data_prep_markov_model.R": Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
  3)  "/Scripts/1_Data_prep_coxme.R": Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
     
-# Scripts with Stan model codes for all intervention scenarios
+# Stan model code scripts 
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:
 
-| Script | Scenario | Intervention structure | Seasonal effect | Intervention affects |
-|------|---------|------------------------|----------------|----------------------|
-| `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R` | Model 1A (Base case) | Two-step | Sinusoidal | Acquisition only |
-| `/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R` | Model 2A | One-step | Sinusoidal | Acquisition only |
-| `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R` | Model 1B | Two-step | Sinusoidal | Acquisition only |
-| `/Scripts/Final_Stan_Codes/S1_One_Step_Spline_NonAdd_NonCol.R` | Model 2B | One-step | Cubic B-spline | Acquisition only |
-| `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine.R` | Model 3A | Two-step | Sinusoidal | Acquisition and decolonisation |
-| `/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R` | Model 4A | One-step | Sinusoidal | Acquisition and decolonisation |
-| `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` | Model 3B | Two-step | Cubic B-spline | Acquisition and decolonisation |
-| `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` | Model 4B | One-step | Cubic B-spline | Acquisition and decolonisation |
+| Scenario | Intervention structure | Seasonal effect | Intervention affects | Script |
+|---------|------------------------|----------------|----------------------|--------|
+| Model 1A (Base case) | Two-step | Sinusoidal | Acquisition only | `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R` |
+| Model 2A | One-step | Sinusoidal | Acquisition only | `/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R` |
+| Model 1B | Two-step | Sinusoidal | Acquisition only | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R` |
+| Model 2B | One-step | Cubic B-spline | Acquisition only | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline_NonAdd_NonCol.R` |
+| Model 3A | Two-step | Sinusoidal | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine.R` |
+| Model 4A | One-step | Sinusoidal | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R` |
+| Model 3B | Two-step | Cubic B-spline | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` |
+| Model 4B | One-step | Cubic B-spline | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` |
 
 # Scripts used to analyse stan model output and further data analyses
 These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.

@@ -225,7 +225,7 @@ pacman::p_load(ggplot2, rstan, tidyr, bayesplot, gridExtra, dplyr, GGally, lubri
 # LOAD IN DATA
 #----------------------------------------------------------------------
 
-data = readRDS("./Data/Manuscript/bf_esbl0123_long_all.rds")
+data = readRDS("./Public_data/Observed/bf_esbl0123_long_all.rds")
 
 #----------------------------------------------------------------------
 # Handle missing data
@@ -738,5 +738,5 @@ str(stan_data)
 # saveRDS(stan_data, file="./Data/BF/clean/use_in_analyses/bf_stan_data_all.rds")
 # write.csv(data_complete, file = "./Data/BF/clean/use_in_analyses/bf_df_model_all.csv")
 
-saveRDS(stan_data, file="./Data/Manuscript/bf_stan_data_all.rds")
+saveRDS(stan_data, file="./Public_data/Observed/bf_stan_data_all.rds")
 #write.csv(data_complete, file = "./Data/BF/clean/use_in_analyses/bf_df_model_all.csv")

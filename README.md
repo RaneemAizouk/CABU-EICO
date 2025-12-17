@@ -13,7 +13,9 @@ The *primary outcomes* are the change in Watch antibiotic provision from informa
 
 The *secondary outcomes*  are the changes in AMR acquisition dynamics and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures, and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. These are presented in this repository.
 
-# Data
+# Public data
+This folder contains the simulated and publicly available pseudonimised observed household survey and stool collection data
+
 ## Simulated data
  1)  "Public_data/Simulated/Simulated_data_noseasonality_stan_data.rds : Simulated dataset without seasonality in stan format
  2)  "Public_data/Simulated/Simulated_data_seasonality_stan_data.rds : Simulated dataset with seasonality in stan format
@@ -26,6 +28,8 @@ The *secondary outcomes*  are the changes in AMR acquisition dynamics and hygien
   
 # Scripts
 ## Generate simulated data 
+These R scripts generate simulated data, used for model checking
+
 1) "Scripts/0_create_simulated_data_no_seasonality.R": Generates a simulated dataset without a seasonal pattern in ESBL-E acquisition
 2)  "Scripts/0_create_simulated_data_seasonality.R": Generates a simulated dataset a seasonal pattern in ESBL-E acquisition
    

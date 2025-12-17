@@ -37,6 +37,19 @@ These R scripts clean and generate the publicly available anonymized dataframes 
 # Scripts with Stan model codes for all intervention scenarios
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:
 
+| Script | Scenario | Intervention structure | Seasonal effect | Intervention affects |
+|------|---------|------------------------|----------------|----------------------|
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R` | 1A (Base case) | Two-step | Sinusoidal | Acquisition only |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R` | 2A | One-step | Sinusoidal | Acquisition only |
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R` | 1B | Two-step | Sinusoidal | Acquisition only |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Spline_NonAdd_NonCol.R` | 2B | One-step | Cubic B-spline | Acquisition only |
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine.R` | 3A | Two-step | Sinusoidal | Acquisition and decolonisation |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R` | 4A | One-step | Sinusoidal | Acquisition and decolonisation |
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` | 3B | Two-step | Cubic B-spline | Acquisition and decolonisation |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` | 4B | One-step | Cubic B-spline | Acquisition and decolonisation |
+
+
+
 1) "/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R": Model scenario 1A: Two-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only. This is the base case scenario
 2) "/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R": Model scenario 2A: One-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only.
 3) "/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R": Model scenario 1B: Two-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only.

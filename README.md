@@ -19,8 +19,10 @@ We developed and evaluated a behavioural intervention bundle, targeting any comm
 Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (manuscript — to be added).
 
 *Secondary outcomes* (presented in this repository)
-* Intervention-related change in ESBL-*E. coli* acquisition dynamics, assessed via repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. 
-* Pre-/Post- intervention change in hygiene practices, assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures,
+* Intervention-related change in ESBL-*E. coli* acquisition dynamics, assessed via repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. 
+* Pre-/Post- intervention change in hygiene practices, assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures.
+
+These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. 
 
 # Public data
 

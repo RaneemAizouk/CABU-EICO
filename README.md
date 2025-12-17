@@ -39,7 +39,7 @@ The following Stan-based model scripts implement the Bayesian continuous-time mu
 8) "/S1_One_Step_Spline.R": Model scenario 4B: One-step intervention, flexible cubic B-spline seasonality, intervention affects acquisition and decolonisation.
 
 # Data analyses scripts
-These R scripts can be run using the publicly available anonymized dataframes available on this repository.
+These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
 
  1)  "/1_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
  2)  "/2_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.

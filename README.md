@@ -6,6 +6,10 @@ Aizouk R. et al., *Targeting community-level drivers of antimicrobial resistance
 # Study registration
 https://clinicaltrials.gov/ct2/show/NCT05378880
 
+# Related publications
+1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
+2) Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (manuscript — to be added).
+
 # Project summary
 We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce AMR transmission. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo. In a cluster RCT, we compared the 22 intervention with 22 control clusters. 
 
@@ -64,9 +68,5 @@ These R scripts were used to analyse the markov model output, as well as the cha
  2)  "/Scripts/3_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
  3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 
  9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. 
-
-# Related publications
-1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
-2) Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (manuscript — to be added).
 
 

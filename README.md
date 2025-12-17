@@ -22,7 +22,7 @@ This folder contains the simulated household survey and stool collection data
  2)  "Public_data/Simulated/Simulated_data_seasonality_stan_data.rds : Simulated dataset with seasonality in stan format
     
 ## Observed data
-This folder contains the cleaned and pseudonimised household survey and stool collection data
+This folder contains the cleaned and anonymised household survey and stool collection dataframes available on this repository and used for data analyses
 
   1) "/Public_data/Observed/bf_esbl0123_long_all.rds"                 : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals.
   2) "/Public_data/Observed/bf_esbl0123_long_completecases.rds"       : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals with four observations (complete follow up).

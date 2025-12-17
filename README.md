@@ -1,5 +1,5 @@
 # Optimising Community Antibiotic Use and Infection Control With Behavioural Interventions in Burkina Faso and DR Congo (CABU-EICO project)
-This repository contains the study protocol, publicly available data, and code underlying the following study:
+This repository contains the study protocol, household survey, publicly available data, and code underlying the following study:
 
 Aizouk R. et al., *Targeting community-level drivers of antimicrobial resistance in sub-Saharan Africa: The effect of a community-based intervention bundle on household transmission of ESBL-E in rural Burkina Faso - a cluster-randomised trial*. MedRxiv. doi: https://doi.org/10.64898/2025.12.15.25342269 
 

@@ -18,7 +18,8 @@ The secondary outcomes presented here, included changes in hygiene practices and
   4) Household_stool_WASH_BF.csv              = Cleaned and anonymised CABU-EICO Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken.
   
 # Data cleaning scripts  
-These R scripts can not show the cleaning process to generate the anonymized dataframes available on this repository.
+These R scripts clean and generate the publicly available anonymized dataframes available on this repository.
+
  1)  0_clean_and_describe_hh_survey.R: Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
  2)  0_data_prep_markov_model.R: Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
  3)  0_Data_prep_coxme.R: Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
@@ -36,6 +37,8 @@ The following Stan-based model scripts implement the Bayesian continuous-time mu
 8) S1_One_Step_Spline.R: Model scenario 4B: One-step intervention, flexible cubic B-spline seasonality, intervention affects acquisition and decolonisation.
 
 # Data analyses scripts
+These R scripts can be run using the publicly available anonymized dataframes available on this repository.
+
  1)  1_scenario_fit_comparison.R: Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
  2)  2_analyses_change_WASH.R: Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
  3)  3_CoxModel_WASH.R: Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 

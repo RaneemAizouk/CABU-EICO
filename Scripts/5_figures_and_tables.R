@@ -8,24 +8,25 @@
 
 # Load in packages
 pacman::p_load(dplyr, tibble, tidyr, stringr, ggplot2, posterior, rstan, readr, 
-               tools, ggplot2, patchwork)
+               tools, ggplot2, patchwork, table1, readxl, writexl)
 
 # SET DIRECTORY
-DirectoryData <- "./Data/BF/clean"
-load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_all.rda"))
-load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_completecases.rda"))
+#DirectoryData <- "./Data/BF/clean"
+DirectoryData <- "./Public_data/Observed"
 
+#load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_all.rda"))
+# load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_completecases.rda"))
+dfls0 <- readRDS("./Public_data/Observed/bf_esbl0123_long_all.rds")
 #------------------------------------------------------------------------------
 # Descriptive tables
 #------------------------------------------------------------------------------
 
 # Load household data
-hh = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_WASH_BF.csv"))
-hh_ind = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
+# hh = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_WASH_BF.csv"))
+# hh_ind = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
 
-load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_all.rda"))
-load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_completecases.rda"))
-
+hh = read.csv(paste0(DirectoryData,"/bf_wash_data.csv"))
+#hh_ind = read.csv(paste0(DirectoryData,"/FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
 
 # PREAMBLE
 #-----------------------------------------------------------
@@ -44,7 +45,7 @@ custom_order <- c(
 # Make long format for WASH INDICATORS
 # Convert variables to factor with custom order
 hh_l <- hh %>%
-  select(menage_id, village_name, intervention.text, redcap_event_name, date.enquete,
+  select(menage_id, village_code, intervention.text, round, date.enquete,
          main.drinking.water.dry.binary, main.drinking.water.rainy.binary, 
          correct.handwashing.binary, 
          improved.sanitation.binary, livestock.access.house.binary, 
@@ -61,36 +62,86 @@ dfls0 = dfls0 %>% mutate(
   agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
 )
 
-dfls0complete = dfls0complete %>% mutate(
-  agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
-)
+# dfls0complete = dfls0complete %>% mutate(
+#   agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
+# )
 
 #---------------------------------------------------------
 # DESCRIPTIVES
 #----------------------------------------------------------
 # R0 characteristics 
-table1 = table1(~ n.householdmember +
-                      n.child.0to5 +
+table1 = table1(~n.child.0to5 +
                   age + 
                   agegr +
-                      n.households.concession +
-                      ses.quintile| factor(intervention.text), data=dfls0%>%filter(redcap_event_name=="round_0_arm_1"))
+                      ses.quintile| factor(intervention.text), data=dfls0%>%filter(round==1))
 table1
 
 write.xlsx(table1, "./Output/Figures_and_tables/Paper/Final/Table1_hh_member_characteristics_unformatted.xlsx")
 
 # ESBL per round
-d = dfls0 %>% group_by(redcap_event_name, intervention.text) %>%
-  summarise(n_denom = n())
+d = dfls0 %>% group_by(round, intervention.text) %>%
+  summarise(n_denom = n()) 
 
-d2 = dfls0 %>% group_by(redcap_event_name, intervention.text, esble) %>%
+d2 = dfls0 %>% group_by(round, intervention.text, esble) %>%
   summarise(n = n())
 
 da = left_join(d2, d)
 da$prev = da$n/da$n_denom
 
-da_control = da %>% filter(intervention.text == "control")
+da_control = da %>% filter(intervention.text == "Control")
 median(da_control$prev[da_control$esble==1])
+
+da %>% filter(round==1)
+
+#------------------------------------------------------------------------------
+# WASH Tables
+#------------------------------------------------------------------------------
+
+# Baseline
+tableS4 = table1(~ main.drinking.water.dry.binary +
+                   main.drinking.water.rainy.binary +
+                   correct.handwashing.binary +
+                   improved.sanitation.binary + 
+                   livestock.access.house.binary + 
+                    animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==1))
+tableS4
+
+tableS4_stool = table1(~ main.drinking.water.dry.binary +
+                   main.drinking.water.rainy.binary +
+                   correct.handwashing.binary +
+                   improved.sanitation.binary + 
+                   livestock.access.house.binary + 
+                   animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==1, stool.collect==1))
+tableS4_stool
+
+# Post-intervention
+tableS4post = table1(~ main.drinking.water.dry.binary +
+                   main.drinking.water.rainy.binary +
+                   correct.handwashing.binary +
+                   improved.sanitation.binary + 
+                   livestock.access.house.binary + 
+                   animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==4))
+tableS4post
+
+tableS4_stoolpost = table1(~ main.drinking.water.dry.binary +
+                         main.drinking.water.rainy.binary +
+                         correct.handwashing.binary +
+                         improved.sanitation.binary + 
+                         livestock.access.house.binary + 
+                         animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==4, stool.collect==1))
+tableS4_stoolpost
+
+tableS4_df <- as.data.frame(tableS4)
+tableS4_stool_df <- as.data.frame(tableS4_stool)
+
+tableS4post_df <- as.data.frame(tableS4post)
+tableS4post_stool_df <- as.data.frame(tableS4_stoolpost)
+
+
+write_xlsx(tableS4_stool_df, "./Output/Figures_and_tables/Paper/TableS4_wash_stool_baseline.xlsx")
+write_xlsx(tableS4_df, "./Output/Figures_and_tables/Paper/TableS4_wash_baseline.xlsx")
+write_xlsx(tableS4post_stool_df, "./Output/Figures_and_tables/Paper/TableS4_wash_stool_post.xlsx")
+write_xlsx(tableS4post_df, "./Output/Figures_and_tables/Paper/TableS4_wash_post.xlsx")
 
 #------------------------------------------------------------------------------
 # Build data (draw-level incidences, summaries, HRs) for any fit
@@ -606,6 +657,9 @@ plot_incidence_panel <- function(data_list,
 
   
 # PLOT TWO SCENARIOS (Scenario 1 and scenario 2 with basecase scenario)
+#---------------------------------------------------------------------------------------------
+
+# THIS CODE WORKS ONE THE MODEL OUTPUT WHICH IS NOT STORED ON GITHUB AS NON-ANONYMISED
 #---------------------------------------------------------------------------------------------
 
 # Inputs

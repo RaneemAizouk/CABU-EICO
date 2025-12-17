@@ -1,4 +1,4 @@
-# Optimising community antibiotic use and environmental infection control with behavioural interventions in rural Burkina Faso and DR Congo (CABU-EICO)
+# Targerting community-level drivers of antimicrobial resistance in sub-Saharan Africa: The effect of a community-based intervention bundle on household transmission of ESBL-E in rural Burkina Faso - a cluster-randomised trial
 This repository contains the publicly available data, and code underlying the following study:
 
 Aizouk R. et al., *Targerting community-level drivers of antimicrobial resistance in sub-Saharan Africa: The effect of a community-based intervention bundle on household transmission of ESBL-E in rural Burkina Faso - a cluster-randomised trial*. MedRxiv. doi: https://doi.org/10.64898/2025.12.15.25342269 

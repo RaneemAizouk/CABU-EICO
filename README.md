@@ -14,10 +14,10 @@ The *primary outcomes* presented in the joint submission manuscript, are the cha
 The *secondary outcomes* presented here, included changes in AMR acquisition dynamics and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures, and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework presented in this repository.
 
 # Data
-  1) "/bf_esbl0123_long_all.rda"                 = Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals.
-  2) "/bf_esbl0123_long_completecases.rda"       = Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals with four observations (complete follow up).
-  3) "/Household_WASH_BF.csv"                    = Cleaned and anonymised CABU-EICO household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken.
-  4) "/Household_stool_WASH_BF.csv"              = Cleaned and anonymised CABU-EICO Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken.
+  1) "/bf_esbl0123_long_all.rda"                 : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals.
+  2) "/bf_esbl0123_long_completecases.rda"       : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals with four observations (complete follow up).
+  3) "/Household_WASH_BF.csv"                    : Cleaned and anonymised CABU-EICO household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken.
+  4) "/Household_stool_WASH_BF.csv"              : Cleaned and anonymised CABU-EICO Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken.
   
 # Data cleaning scripts  
 These R scripts clean and generate the publicly available anonymized dataframes available on this repository.

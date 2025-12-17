@@ -46,6 +46,14 @@ These R scripts clean and generate the publicly available anonymized dataframes 
  1)  "/Scripts/1_clean_and_describe_hh_survey.R": Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
  2)  "/Scripts/1_data_prep_markov_model.R": Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
  3)  "/Scripts/1_Data_prep_coxme.R": Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
+
+## Analysis and output scripts
+These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
+
+ 1)  "/Scripts/2_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
+ 2)  "/Scripts/3_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
+ 3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 
+ 9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. 
     
 ## Stan model 
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:
@@ -60,13 +68,5 @@ The following Stan-based model scripts implement the Bayesian continuous-time mu
 | `/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R` | Model 4A | One-step intervention; sinusoidal seasonal effect; intervention affects acquisition and decolonisation |
 | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` | Model 3B | Two-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
 | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` | Model 4B | One-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
-
-## Analysis and output scripts
-These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
-
- 1)  "/Scripts/2_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
- 2)  "/Scripts/3_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
- 3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 
- 9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. 
 
 

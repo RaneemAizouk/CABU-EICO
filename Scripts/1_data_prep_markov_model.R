@@ -1,8 +1,10 @@
-####################################################################################
-# THIS CODE CONVERTS THE OBSERVED DATA IN THE CABU EICO STUDY TO A STAN DATA FORMAT
-####################################################################################
+##############################################################################################################
+# THIS CODE CONVERTS THE OBSERVED DATA IN THE CABU EICO STUDY TO A STAN DATA FORMAT AND ANONIMISED DATASETS
+##############################################################################################################
 
-# Last updated: 15 December 2025
+# Author: Raneem Aizouk, Esther van Kleef
+# Date created: August 2025
+# Last updated: 17 December 2025
 
 # Clear environment
 rm(list = ls())
@@ -10,20 +12,20 @@ rm(list = ls())
 # Libraries 
 pacman::p_load(ggplot2, rstan, tidyr, bayesplot, gridExtra, dplyr, GGally, lubridate, readr)
 
+# Lines 15-265 have been used to anonimise the data for publication therefore are canceled out
+#------------------------------------------------------------------------------------------------
+
 #----------------------------------------------------------------------
 # load dataset
 #----------------------------------------------------------------------
 
 #load("./Data/BF/clean/use_in_analyses/bf_esbl0123_long_all.rda")
 #timing_interventions <- read.csv("./Data/BF/timing_interventions.csv")
+#data <- dfls0
 
 #----------------------------------------------------------------------
 # Data pre-processing 
 #----------------------------------------------------------------------
-
-# Lines 37-230 have been used to anonimise the data for publication therefore are canceled out
-#------------------------------------------------------------------------------------------------
-
 
 # Create an explicit "observed_state" variable from the original carriage indicator
 # This makes it easier to recode or rename later without touching the raw "esble" column.
@@ -59,12 +61,149 @@ pacman::p_load(ggplot2, rstan, tidyr, bayesplot, gridExtra, dplyr, GGally, lubri
 #   relocate(round, .after = redcap_event_name)
 # 
 # # store dataset for publication
-# dpub <- data[, c(1:38)]
+# dpub <- data[, c(1:38,116)]
+# 
+# # Get unique villages
+# villages <- unique(dpub$village_name)
+# 
+# # Sort alphabetically (ignore case)
+# villages_sorted <- sort(villages)
+# 
+# # Create numeric codes 1:22
+# village_codes <- setNames(seq_along(villages_sorted), villages_sorted)
+# 
+# # Recode into a new variable
+# dpub$village_code <- village_codes[dpub$village_name]
 # 
 # names(dpub)
 # 
+# # Store pseudonomised key
+# head(dpub)
+# dps = dpub %>% select(c(menage_id_member_orig, menage_id, village_name, menage_id_member, HouseID, village_code))
+# 
+# write.csv(dps, "./Data/PseudoID_key_BF_data.csv")
+# write.csv(dps, "../../Papers/CABU_EICO/Paper_Transmission_ESBL/Final/Submission/PseudoID_key_BF_data.csv")
+# 
+# # Now use the same codes for the WASH datasets
+# DirectoryData <- "./Data/BF/clean"
+# 
+# # HH WaSH (all HH) and stool-HH subset
+# wash        <- read.csv(file.path(DirectoryData, "FINAL_FOR_SHARING/Household_WASH_BF.csv"))
+# wash_stool  <- read.csv(file.path(DirectoryData, "FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
+# 
+# dps_house = dps %>% filter(!duplicated(menage_id))
+# 
+# d = left_join(wash, dps_house%>%select(menage_id, HouseID))
+# 
+# table_missing <- d %>%
+#   summarize(
+#     n_rows = n(),
+#     n_unique_menage = n_distinct(menage_id),
+#     n_have_houseid = sum(!is.na(HouseID)),
+#     n_missing_houseid = sum(is.na(HouseID))
+#   )
+# table_missing
+# 
+# # make a table of unique menage -> existing HouseID (if any)
+# menage_lookup <- d%>%
+#   group_by(menage_id) %>%
+#   summarize(
+#     existing_HouseID = if(any(!is.na(HouseID))) unique(HouseID[!is.na(HouseID)])[1] else NA_integer_,
+#     .groups = "drop"
+#   )
+# menage_lookup
+# 
+# # find start id for new codes
+# # compute start id
+# start_id <- if (all(is.na(d$HouseID))) 0L else max(d$HouseID, na.rm = TRUE)
+# start_id
+# 
+# # create menage -> existing HouseID lookup
+# menage_lookup <- d %>%
+#   group_by(menage_id) %>%
+#   summarize(
+#     existing_HouseID = if(any(!is.na(HouseID))) unique(HouseID[!is.na(HouseID)])[1] else NA_integer_,
+#     .groups = "drop"
+#   )
+# menage_lookup
+# 
+# # assign new HouseID only where missing
+# menage_lookup <- menage_lookup %>%
+#   arrange(menage_id) %>%
+#   mutate(
+#     needs_new  = is.na(existing_HouseID),
+#     na_seq     = cumsum(needs_new) * needs_new,
+#     new_HouseID = ifelse(needs_new, start_id + na_seq, existing_HouseID)
+#   ) %>%
+#   select(-needs_new, -na_seq)
+# 
+# # join mapping back to main data
+# d <- d %>%
+#   select(-HouseID) %>%
+#   left_join(
+#     menage_lookup %>% select(menage_id, new_HouseID),
+#     by = "menage_id"
+#   ) %>%
+#   rename(HouseID = new_HouseID) %>%
+#   mutate(HouseID = as.integer(HouseID))
+# 
+# # sanity checks
+# if (any(is.na(d$HouseID))) {
+#   stop("Some HouseID are still NA")
+# }
+# 
+# n_menage <- n_distinct(d$menage_id)
+# n_house  <- n_distinct(d$HouseID)
+# 
+# if (n_menage != n_house) {
+#   warning("Unique menage_id != unique HouseID")
+#   print(
+#     d %>%
+#       distinct(menage_id, HouseID) %>%
+#       group_by(menage_id) %>%
+#       tally() %>%
+#       filter(n > 1)
+#   )
+# }
+# 
+# message(
+#   "HouseID range: ",
+#   paste(range(d$HouseID, na.rm = TRUE), collapse = " - ")
+# )
+# # Select relevant columns
+# ds = d %>% select(village_name, menage_id, HouseID, intervention.text, redcap_event_name, date.enquete, n.householdmember, n.child.0to5, 
+#                   n.households, n.population, ses.quintile, main.drinking.water.dry.binary, main.drinking.water.rainy.binary,
+#                   correct.handwashing.binary, improved.sanitation.binary, livestock.access.house.binary, animal.excrement.floor.binary)
+# 
+# ds = left_join(ds, dps_house%>%filter(!duplicated(village_name)) %>%select(village_name, village_code), by="village_name")
+# unique(ds$HouseID)
+# unique(ds$village_code)
+# 
+# ds = ds %>% select(-c(village_name))
+# ds = ds %>%
+#   select(village_code, HouseID, everything())
+# 
+# ds$round <- as.integer(gsub("round_(\\d+)_arm_1", "\\1", ds$redcap_event_name)) + 1
+# ds <- ds %>% select(-c(redcap_event_name))
+# table(ds$round)
+# 
+# ds_stool = left_join(wash_stool, dps_house%>%select(village_code, menage_id, HouseID))
+# table(ds_stool$HouseID, useNA="always")
+# 
+# ds$stool.collect = ifelse(ds$HouseID %in% ds_stool$HouseID, 1, 0)
+# table(ds$round,ds$stool.collect)
+# # 
+# # 
+# # ds_stool = ds_stool %>% select(village_code, menage_id, HouseID, intervention_text, redcap_event_name, date.enquete, n.householdmember, n.child.0to5, 
+# #                   n.households, n.population, ses.quintile, main.drinking.water.dry.binary, main.drinking.water.rainy.binary,
+# #                   correct.handwashing.binary, improved.sanitation.binary, livestock.access.house.binary, animal.excrement.floor.binary)
+# 
+# # Store data
+# write.csv(ds, "./Public_data/Observed/bf_wash_data.csv")
+# 
+# # NOW MOVE ON WITH ANONIMISED DATASETS
 # dpub2 <- dpub %>% select(!c(redcap_event_name,time, menage_id, date.consent,date.stool.collection, date, date_conserv, germe_c, data.row,date.enquete,
-#                             cleaning.water.storage.binary))
+#                             cleaning.water.storage.binary, menage_id_member_orig))
 # 
 # 
 # #----------------------------------------------------------------------
@@ -217,10 +356,14 @@ pacman::p_load(ggplot2, rstan, tidyr, bayesplot, gridExtra, dplyr, GGally, lubri
 # 
 # dfls0 = data
 # 
+# names(dfls0)
+# dfls0 <- dfls0 %>%
+#   select(village_code, HouseID, menage_id_member, everything())
+# 
 # # Store data for paper
-# saveRDS(dfls0, file="./Data/Manuscript/bf_esbl0123_long_all.rds")
-# write.csv(dfls0, "./Data/Manuscript/bf_esbl0123_long_all.csv")
-
+# saveRDS(dfls0, file="./Public_data/Observed/bf_esbl0123_long_all.rds")
+# write.csv(dfls0, "./Public_data/Observed/bf_esbl0123_long_all.csv")
+# 
 
 # LOAD IN DATA
 #----------------------------------------------------------------------

@@ -13,9 +13,14 @@ https://clinicaltrials.gov/ct2/show/NCT05378880
 # Project summary
 We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce AMR transmission. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo. In a cluster RCT, we compared the 22 intervention with 22 control clusters. 
 
-The *primary outcomes* are the change in Watch antibiotic provision from informal and formal medicine providers and change in patient management, assessed via patient exit interviews and simulated client visits. These are presented in a joint submission to this manuscript.
+*Primary outcomes* (presented in: manuscript - to be added): 
+* Pre-/post-intervention change in Watch antibiotic provision prevalence from informal and formal medicine providers, assessed via patient exit interviews.
+* Pre-/post-intervention change in patient management, assessed via simulated patient visits. These are presented in a joint submission to this manuscript. 
+Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (manuscript — to be added).
 
-The *secondary outcomes*  are the changes in AMR acquisition dynamics and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures, and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. These are presented in this repository.
+*Secondary outcomes* (presented in this repository)
+* Intervention-related change in ESBL-*E. coli* acquisition dynamics, assessed via repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. 
+* Pre-/Post- intervention change in hygiene practices, assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures,
 
 # Public data
 

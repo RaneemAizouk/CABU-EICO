@@ -37,16 +37,16 @@ These R scripts clean and generate the publicly available anonymized dataframes 
 # Stan model code scripts 
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:
 
-| Scenario | Intervention structure | Seasonal effect | Intervention affects | Script |
-|---------|------------------------|----------------|----------------------|--------|
-| Model 1A (Base case) | Two-step | Sinusoidal | Acquisition only | `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R` |
-| Model 2A | One-step | Sinusoidal | Acquisition only | `/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R` |
-| Model 1B | Two-step | Sinusoidal | Acquisition only | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R` |
-| Model 2B | One-step | Cubic B-spline | Acquisition only | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline_NonAdd_NonCol.R` |
-| Model 3A | Two-step | Sinusoidal | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine.R` |
-| Model 4A | One-step | Sinusoidal | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R` |
-| Model 3B | Two-step | Cubic B-spline | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` |
-| Model 4B | One-step | Cubic B-spline | Acquisition and decolonisation | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` |
+| Script | Scenario | Model description |
+|--------|----------|------------------|
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R` | Model 1A (Base case) | Two-step intervention; sinusoidal seasonal effect; intervention affects acquisition only |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R` | Model 2A | One-step intervention; sinusoidal seasonal effect; intervention affects acquisition only |
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R` | Model 1B | Two-step intervention; sinusoidal seasonal effect; intervention affects acquisition only |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Spline_NonAdd_NonCol.R` | Model 2B | One-step intervention; cubic B-spline seasonal effect; intervention affects acquisition only |
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Sine.R` | Model 3A | Two-step intervention; sinusoidal seasonal effect; intervention affects acquisition and decolonisation |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R` | Model 4A | One-step intervention; sinusoidal seasonal effect; intervention affects acquisition and decolonisation |
+| `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` | Model 3B | Two-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
+| `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` | Model 4B | One-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
 
 # Scripts used to analyse stan model output and further data analyses
 These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.

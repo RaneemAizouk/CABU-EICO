@@ -52,8 +52,8 @@ These R scripts were used to analyse the markov model output, as well as the cha
 
  1)  "/Scripts/2_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
  2)  "/Scripts/3_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
- 3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 
- 9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. 
+ 3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition and plots results. 
+ 9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses and Markov models. 
     
 ## Stan model 
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:

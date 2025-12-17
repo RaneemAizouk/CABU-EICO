@@ -6,10 +6,6 @@ Aizouk R. et al., *Targeting community-level drivers of antimicrobial resistance
 # Study registration
 https://clinicaltrials.gov/ct2/show/NCT05378880
 
-# Related publications
-1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
-2) Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (manuscript — to be added).
-
 # Project summary
 We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce AMR transmission. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo. In a cluster RCT, we compared the 22 intervention with 22 control clusters. We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce AMR transmission. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo. In a cluster RCT, we compared the 22 intervention with 22 control clusters. 
 
@@ -69,4 +65,7 @@ The following Stan-based model scripts implement the Bayesian continuous-time mu
 | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` | Model 3B | Two-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
 | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` | Model 4B | One-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
 
+# Related publications
+1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
+2) Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (manuscript — to be added).
 

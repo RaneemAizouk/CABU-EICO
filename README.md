@@ -46,8 +46,7 @@ These R scripts clean and generate the publicly available anonymized dataframes 
 
  1)  "/Scripts/1_clean_and_describe_hh_survey.R": Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
  2)  "/Scripts/1_data_prep_markov_model.R": Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
- 3)  "/Scripts/1_Data_prep_coxme.R": Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
-
+ 
 ## Analysis and output scripts
 These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
 

@@ -22,29 +22,29 @@ The *secondary outcomes*  are the changes in AMR acquisition dynamics and hygien
 # Data cleaning scripts  
 These R scripts clean and generate the publicly available anonymized dataframes available on this repository.
 
- 1)  "/0_clean_and_describe_hh_survey.R": Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
- 2)  "/0_data_prep_markov_model.R": Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
- 3)  "/0_Data_prep_coxme.R": Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
+ 1)  "/Scripts/0_clean_and_describe_hh_survey.R": Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
+ 2)  "/Scripts/0_data_prep_markov_model.R": Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
+ 3)  "/Scripts/0_Data_prep_coxme.R": Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
     
 # Stan model codes and scenario analyses
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:
 
-1) "/S2_Two_Step_Sine_NonAdd_NonCol.R": Model scenario 1A: Two-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only. This is the base case scenario
-2) "/S1_One_Step_Sine_NonAdd_NonCol.R": Model scenario 2A: One-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only.
-3) "/S2_Two_Step_Spline_NonAdd_NonCol.R": Model scenario 1B: Two-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only.
-4) "/S1_One_Step_Spline_NonAdd_NonCol.R": Model scenario 2B: One-step intervention effect, flexible cubic B-spline seasonal effect, intervention assumed to affect acquisition only.
-5) "/S2_Two_Step_Sine.R": Model scenario 3A: Two-step intervention, sinusoidal seasonality, intervention affects acquisition and decolonisation.
-6) "/S1_One_Step_Sine.R": Model scenario 4A: One-step intervention, sinusoidal seasonality, intervention affects acquisition and decolonisation.
-7) "/S2_Two_Step_Spline.R": Model scenario 3B: Two-step intervention, flexible cubic B-spline seasonality, intervention affects acquisition and decolonisation.
-8) "/S1_One_Step_Spline.R": Model scenario 4B: One-step intervention, flexible cubic B-spline seasonality, intervention affects acquisition and decolonisation.
+1) "/Scripts/Final_Stan_Codes/S2_Two_Step_Sine_NonAdd_NonCol.R": Model scenario 1A: Two-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only. This is the base case scenario
+2) "/Scripts/Final_Stan_Codes/S1_One_Step_Sine_NonAdd_NonCol.R": Model scenario 2A: One-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only.
+3) "/Scripts/Final_Stan_Codes/S2_Two_Step_Spline_NonAdd_NonCol.R": Model scenario 1B: Two-step intervention effect, sinusoidal seasonal effect, intervention assumed to affect acquisition only.
+4) "/Scripts/Final_Stan_Codes/S1_One_Step_Spline_NonAdd_NonCol.R": Model scenario 2B: One-step intervention effect, flexible cubic B-spline seasonal effect, intervention assumed to affect acquisition only.
+5) "/Scripts/Final_Stan_Codes/S2_Two_Step_Sine.R": Model scenario 3A: Two-step intervention, sinusoidal seasonality, intervention affects acquisition and decolonisation.
+6) "/Scripts/Final_Stan_Codes/S1_One_Step_Sine.R": Model scenario 4A: One-step intervention, sinusoidal seasonality, intervention affects acquisition and decolonisation.
+7) "/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R": Model scenario 3B: Two-step intervention, flexible cubic B-spline seasonality, intervention affects acquisition and decolonisation.
+8) "/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R": Model scenario 4B: One-step intervention, flexible cubic B-spline seasonality, intervention affects acquisition and decolonisation.
 
 # Data analyses scripts
 These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
 
- 1)  "/1_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
- 2)  "/2_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
- 3)  "/3_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 
- 9)  "/4_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. 
+ 1)  "/Scripts/1_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
+ 2)  "/Scripts/2_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
+ 3)  "/Scripts/3_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition. 
+ 9)  "/Scripts/4_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses, Markov models, and Cox regression analyses. 
 
 # Related publications
 1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)

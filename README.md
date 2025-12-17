@@ -1,25 +1,25 @@
-# Targerting community-level drivers of antimicrobial resistance in sub-Saharan Africa: The effect of a community-based intervention bundle on household transmission of ESBL-E in rural Burkina Faso - a cluster-randomised trial
+# Optimising Community Antibiotic Use and Infection Control With Behavioural Interventions in Burkina Faso and DR Congo (CABU-EICO project)
 This repository contains the publicly available data, and code underlying the following study:
 
-Aizouk R. et al., *Targerting community-level drivers of antimicrobial resistance in sub-Saharan Africa: The effect of a community-based intervention bundle on household transmission of ESBL-E in rural Burkina Faso - a cluster-randomised trial*. MedRxiv. doi: https://doi.org/10.64898/2025.12.15.25342269 
+Aizouk R. et al., *Targeting community-level drivers of antimicrobial resistance in sub-Saharan Africa: The effect of a community-based intervention bundle on household transmission of ESBL-E in rural Burkina Faso - a cluster-randomised trial*. MedRxiv. doi: https://doi.org/10.64898/2025.12.15.25342269 
 
 # Study registration
 https://clinicaltrials.gov/ct2/show/NCT05378880
 
 # Project summary
-We conducted a cluster-randomised controlled trial in 22 village clusters in Nanoro district, Burkina Faso. We enrolled 12 randomly selected households per cluster to assess intervention impact on ESBL-E household-transmission. The intervention comprised three rounds at three-month intervals and combined WHO AWaRe–based educational feedback for formal and informal medicine providers with a community-wide WASH and antibiotic-use behaviour change campaign. Consenting household members provided stool samples before, during, and after intervention rollout, alongside a pre–post household WASH survey. We estimated intervention effects on ESBL-E acquisition using Bayesian Markov models. Cox frailty models assessed associations between WASH exposures and acquisition. Finally, using quasi-poisson regression models, we estimated changes in pre-specified WASH indicators pre-/post intervention. 
+We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce AMR transmission. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo. In a cluster RCT, we compared the 22 intervention with 22 control clusters. The primary outcome measure is the change in Watch antibiotic provision from medicine stores (where a formal prescription is not required), assessed via patient exit interviews and simulated client visits. 
 
-These are the secondary outcomes from the CABU-EICO trial, primary outcomes, the pre- to post-intervention change in prevalence of dispensing Watch antibiotics, and patient management at medicine stores or health centers are presented in the joint submission to this work. 
+Secondary outcomes included changes in hygiene practices and AMR acquisition which were assessed using a pre-/post-interventoin household survey collected data on Water access, Sanitation and Hygiene (WASH), and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework presented in this repository.
 
 # Data
-  1) bf_esbl0123_long_all.rda                 = Cleaned feacal sample dataset linked with households survey containing the observations of all individiuals
-  2) bf_esbl0123_long_completecases.rda       = Cleaned feacal sample dataset linked with households survey containing the observations of all individiuals with four observations (complete follow up)
-  3) Household_WASH_BF.csv                    = Household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken
-  4) Household_stool_WASH_BF.csv              = Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken
+  1) bf_esbl0123_long_all.rda                 = Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals.
+  2) bf_esbl0123_long_completecases.rda       = Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals with four observations (complete follow up).
+  3) Household_WASH_BF.csv                    = Cleaned and anonymised CABU-EICO household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken.
+  4) Household_stool_WASH_BF.csv              = Cleaned and anonymised CABU-EICO Household survey WASH observations measured pre- and post-intervention for households where stool samples were taken.
   
 # Data cleaning scripts  
 These R scripts can not show the cleaning process to generate the anonymized dataframes available on this repository.
- 1)  0_clean_and_describe_hh_survey.R: Cleans, and links the CABU-EICO household survey stool collection data, and Water access, Sanitation and Hygiene (WASH) survey data.
+ 1)  0_clean_and_describe_hh_survey.R: Cleans, and links the CABU-EICO household survey stool collection data, and WASH survey data.
  2)  0_data_prep_markov_model.R: Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
  3)  0_Data_prep_coxme.R: Prepares the cleaned CABU-EICO longitudinal household survey data for Cox proportional hazards mixed-effects modelling.
     

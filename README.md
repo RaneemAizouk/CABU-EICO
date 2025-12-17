@@ -13,6 +13,11 @@ The *primary outcomes* are the change in Watch antibiotic provision from informa
 
 The *secondary outcomes* are the changes in AMR acquisition dynamics and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures, and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. Code available in this repository.
 
+# Timeline
+CABU-EICO study: 1 May 2022 to 30 April 2025. 
+Household WASH survey data collection: Oct 2022 to Feb 2023 (Baseline); Oct 2023 to Feb 2024 (Post-intervention)  
+Household stool collection: Oct 2022 to Feb 2024 (four rounds of stool collection at Baseline, intervention start, 3-months post-intervention start and 9-months post-intervention start
+
 # Public data
 
 ## Simulated data

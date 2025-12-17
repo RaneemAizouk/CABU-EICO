@@ -3,7 +3,7 @@
 ########################################################################################
 # Author: Esther van Kleef
 # Date: 4 October 2025
-# Last updated: 14 October 2025
+# Last updated: 17 December 2025
 
 rm(list = ls())
 
@@ -12,42 +12,14 @@ pacman::p_load(survey, dplyr, tidyr, AER, stringr, broom, readr, purrr, tibble,f
 # -------------------------------------------------------------------------------
 # Directory and load in data
 # -------------------------------------------------------------------------------
-DirectoryData <- "./Data/BF/clean"
+#DirectoryData <- "./Data/BF/clean"
+DirectoryData <- "./Public_data/Observed/"
 
 # HH WaSH (all HH) and stool-HH subset
-wash        <- read.csv(file.path(DirectoryData, "FINAL_FOR_SHARING/Household_WASH_BF.csv"))
-wash_stool  <- read.csv(file.path(DirectoryData, "FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
+# wash        <- read.csv(file.path(DirectoryData, "FINAL_FOR_SHARING/Household_WASH_BF.csv"))
+# wash_stool  <- read.csv(file.path(DirectoryData, "FINAL_FOR_SHARING/Household_stool_WASH_BF.csv"))
 
-# Provider × village antibiotic use
-watch <- read.csv(file.path(DirectoryData, "use_in_analyses/watch_acute_offset.csv"))
-
-# MSM village ESBL results (calendar-time adjusted) — long with village, Group, phase_label, median, var, (lo/hi, n_draws)
-msm_draws <- read.csv("./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/inc_s1.csv")
-
-# Villages (that are the clusters) of CABU-EICO
-villages = readxl::read_xlsx(paste0("./Data/BF/Raw/bf_villages_cabu.xlsx"))
-names(villages) = c("village", "village_name","intervention_text","ajouter")
-
-village_size = readxl::read_xlsx(paste0("./Data/BF/Raw/Sélection et randomisation grappes CABU_B Nanoro.xlsx"), sheet=1)
-names(village_size)
-village_size = village_size %>% select(c(`Nom des villages`, ménages, `population active (Mar 2023 update)`))%>%
-  rename(
-    village_name = `Nom des villages`,
-    n.households =  ménages,
-    n.population = `population active (Mar 2023 update)`
-  ) %>%
-  filter(!is.na(village_name))
-head(village_size)
-
-villages = left_join(villages, village_size, by="village_name")
-villages$village_name = tolower(villages$village_name)
-
-# Inform the number of households based on average household size
-m_size = median(villages$n.population[villages$village_name!="pella"]/villages$n.households[villages$village_name!="pella"])
-
-wash$n.households[wash$village_name=="pella"] = wash$n.population[wash$village_name=="pella"]/m_size
-
-#wash = left_join(wash, villages%>%select(c(village_name, n.population, n.households)))
+wash <- read.csv(file.path(DirectoryData, "bf_wash_data.csv"))
 
 # -------------------------------------------------------------------------------
 # Functions
@@ -71,7 +43,7 @@ to_arm <- function(x) {
 prep_wash <- function(df) {
   round_nm <- pick_col(df, c("redcap_event_name","round"))
   arm_nm   <- pick_col(df, c("intervention.text","arm","intervention","intervention_text"))
-  vill_nm  <- pick_col(df, c("village_name","village","village.cluster","VillageID"))
+  vill_nm  <- pick_col(df, c("village_name","village","village.cluster","VillageID", "village_code"))
   date <- pick_col(df, c("date.enquete"))
   
   out <- df %>%
@@ -81,21 +53,22 @@ prep_wash <- function(df) {
       n.population = .data[["n.population"]],
       n.households = .data[["n.households"]],
       village   = .data[[vill_nm]],
-      arm_raw   = .data[[arm_nm]],
-      round_raw = .data[[round_nm]],
+      arm   = .data[[arm_nm]],
+      round = .data[[round_nm]],
       date = .data[[date]],
       date = as.Date(date, format = "%Y-%m-%d"),
       month = month(date),
       rainy = ifelse(month %in% c(6:11), 1, 0),
+      stool.collect = .data[["stool.collect"]], 
       main.drinking.water.dry.binary    = case_when(main.drinking.water.dry.binary == "Improved" ~ 0, 
                               main.drinking.water.dry.binary == "Unimproved" ~ 1,
                               TRUE ~ NA_real_),
       main.drinking.water.rainy.binary  = case_when(main.drinking.water.rainy.binary == "Improved" ~ 0, 
                               main.drinking.water.rainy.binary == "Unimproved" ~ 1,
                               TRUE ~ NA_real_),
-      no.cleaning.water.storage.binary = case_when(cleaning.water.storage.binary== "Yes" ~ 0, 
-                                cleaning.water.storage.binary == "No" ~ 1,
-                                TRUE ~ NA_real_),
+      # no.cleaning.water.storage.binary = case_when(cleaning.water.storage.binary== "Yes" ~ 0, 
+      #                           cleaning.water.storage.binary == "No" ~ 1,
+      #                           TRUE ~ NA_real_),
       no.correct.handwashing.binary  = case_when(correct.handwashing.binary == "Yes" ~ 0,
                                 correct.handwashing.binary == "No" ~ 1,
                                 TRUE ~ NA_real_),
@@ -110,13 +83,14 @@ prep_wash <- function(df) {
                                                TRUE ~ NA_real_)
     ) %>%
     mutate(
-      arm = factor(to_arm(arm_raw), levels = c("control","intervention")),
-      round = factor(case_when(
-        round_raw == "round_0_arm_1" ~ "baseline",
-        round_raw == "round_3_arm_1" ~ "post",
-        TRUE ~ as.character(round_raw)
-      ), levels = c("baseline","post")),
-      village = tolower(village)
+      arm = factor(to_arm(arm), levels = c("control","intervention")),
+      # round = factor(case_when(
+      #   round_raw == "round_0_arm_1" ~ "baseline",
+      #   round_raw == "round_3_arm_1" ~ "post",
+      #  TRUE ~ as.character(round_raw)
+      #), levels = c("baseline","post")),
+      #village = tolower(village)
+      round = ifelse(round==1, "baseline", "post")
     )
   out
 }
@@ -133,7 +107,9 @@ wash_hh_all <- wash_hh_all %>%
 
 # Select only those where stool samples were taken
 #wash_hh_stool <- prep_wash(wash_stool)
-wash_hh_stool <- wash_hh_all %>% filter(menage_id %in% unique(wash_stool$menage_id))
+# wash_hh_stool <- wash_hh_all %>% filter(menage_id %in% unique(wash_stool$menage_id))
+wash_hh_stool <- wash_hh_all %>% filter(stool.collect==1)
+
 length(unique(wash_hh_stool$menage_id[wash_hh_stool$round=="baseline"])) #266
 length(unique(wash_hh_stool$menage_id[wash_hh_stool$round=="post"])) # 258
 
@@ -144,8 +120,8 @@ indicators <- c(
   "livestock.access.house.binary","animal.excrement.floor.binary"
 )
 
-length(unique(wash_hh_all$menage_id))
-length(unique(wash_hh_all$menage_id[wash_hh_all$round=="post"]))
+length(unique(wash_hh_all$menage_id)) # 808
+length(unique(wash_hh_all$menage_id[wash_hh_all$round=="post"])) # 776
 
 # -------------------------------------------------------------------------------
 # HH weights for SURVEY (population / sampled HHs in each village-round)
@@ -201,7 +177,7 @@ table(wash_hh_all$rainy, wash_hh_all$round, wash_hh_all$animal.excrement.floor.b
 # !!! USE ALL DATA (wash_hh_all) OR ONLY OF THOSE HOUSEHOLDS WHERE STOOL IS COLLECTED (wash_hh_stool) !!!
 
 # Below is with all hh data, have for now run it twice, changing the dataset to wash_hh_stool and store seperately to get the two tables stored
-wash_long_all <- wash_hh_stool%>%
+wash_long_all <- wash_hh_all%>%
   pivot_longer(all_of(indicators), names_to = "indicator", values_to = "y") %>%
   mutate(
     y = as.numeric(y),

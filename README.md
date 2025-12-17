@@ -14,13 +14,16 @@ The *primary outcomes* are the change in Watch antibiotic provision from informa
 The *secondary outcomes*  are the changes in AMR acquisition dynamics and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures, and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. These are presented in this repository.
 
 # Public data
-This folder contains the simulated and publicly available pseudonimised observed household survey and stool collection data
 
 ## Simulated data
+This folder contains the simulated household survey and stool collection data
+
  1)  "Public_data/Simulated/Simulated_data_noseasonality_stan_data.rds : Simulated dataset without seasonality in stan format
  2)  "Public_data/Simulated/Simulated_data_seasonality_stan_data.rds : Simulated dataset with seasonality in stan format
     
 ## Observed data
+This folder contains the cleaned and pseudonimised household survey and stool collection data
+
   1) "/Public_data/Observed/bf_esbl0123_long_all.rds"                 : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals.
   2) "/Public_data/Observed/bf_esbl0123_long_completecases.rds"       : Cleaned and anonymised feacal sample dataset linked with the CABU-EICO households survey containing the observations of all individiuals with four observations (complete follow up).
   3) "/Public_data/Observed/Household_WASH_BF.csv"                    : Cleaned and anonymised CABU-EICO household survey WASH observations measured pre- and post-intervention for all households, including those where no stool samples were taken.

@@ -15,8 +15,10 @@ The *secondary outcomes* are the changes in AMR acquisition dynamics and hygiene
 
 # Timeline
 CABU-EICO study: 1 May 2022 to 30 April 2025. 
+
 Household WASH survey data collection: Oct 2022 to Feb 2023 (Baseline); Oct 2023 to Feb 2024 (Post-intervention)  
-Household stool collection: Oct 2022 to Feb 2024 (four rounds of stool collection at Baseline, intervention start, 3-months post-intervention start and 9-months post-intervention start
+
+Household stool collection: Oct 2022 to Feb 2024 (four rounds of stool collection)
 
 # Public data
 

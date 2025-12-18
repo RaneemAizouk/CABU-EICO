@@ -1155,11 +1155,11 @@ if (trimws(seasonality) == "spline_") {
 
 p_season  
 
-# STORE FIGURE 3
+# STORE FIGURE 4A
 #-----------------------------------------------------------------------------
 
 ggsave(
-  filename = "./Output/Figures/Paper/Figure4A_Seasonal_effect_basecase.tiff",
+  filename = "./Output/Figures/Paper/Final/Figures/Figure4A_Seasonal_effect_basecase.tiff",
   plot     = p_season,
   width    = 12,   # in inches
   height   = 9,    # in inches

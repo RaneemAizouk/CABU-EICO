@@ -1,6 +1,6 @@
-####################################################################################################################
-# THIS CODE IMPLEMENTS A COX-PROPORTIONAL HAZARD MODEL TO ASSESS THE ASSOCIATION BETWEEN WASH AND ESBL-E ACQUISITION/ sensitivity analyses
-####################################################################################################################
+#######################################################################################################################
+# THIS CODE IMPLEMENTS A COX-PROPORTIONAL HAZARD MODEL TO ASSESS THE ASSOCIATION BETWEEN WASH AND ESBL-E ACQUISITION
+#######################################################################################################################
 # Author: Raneem Aizouk
 # Date: April 2025
 # Last updated: 17 December 2025

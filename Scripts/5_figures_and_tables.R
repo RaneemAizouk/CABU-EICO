@@ -1159,7 +1159,7 @@ p_season
 #-----------------------------------------------------------------------------
 
 ggsave(
-  filename = "./Output/Figures/Paper/Figure3_Seasonal_effect_baseline.png",
+  filename = "./Output/Figures/Paper/Figure4A_Seasonal_effect_basecase.tiff",
   plot     = p_season,
   width    = 12,   # in inches
   height   = 9,    # in inches

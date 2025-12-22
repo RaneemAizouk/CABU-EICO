@@ -11,7 +11,7 @@ We developed and evaluated a behavioural intervention bundle, targeting any comm
 
 The *primary outcomes* were the change in Watch antibiotic provision from informal and formal medicine providers and change in patient management, assessed via patient exit interviews and simulated client visits. Code available here: https://github.com/ingelbeen/cabu_intervention
 
-The *secondary outcomes* (which we uniquely did power for) were the changes in AMR acquisition dynamics and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting data on Water access, Sanitation and Hygiene (WASH) exposures, and repeated microbiological (stool) sampling among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. Code available in this repository.
+The *secondary outcomes* (which we uniquely did power for) were the changes in AMR acquisition dynamics, and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting repeated microbiological (stool) samples among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start and data on Water access, Sanitation and Hygiene (WASH) exposures. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. Code available in this repository.
 
 # Timeline
 CABU-EICO study: 1 May 2022 to 30 April 2025. 
@@ -48,14 +48,8 @@ These R scripts clean and generate the publicly available anonymized dataframes 
  2)  "/Scripts/1_data_prep_markov_model.R": Anonymises and prepares the cleaned CABU-EICO longitudinal household survey data for the continuous-time multi-state (Markov) modelling framework in stan as well as the Cox modelling analyses.
  
 ## Analysis and output scripts
-These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
 
- 1)  "/Scripts/2_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
- 2)  "/Scripts/3_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
- 3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition and plots results. 
- 9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses and Markov models. 
-    
-## Stan model 
+### Stan model 
 The following Stan-based model scripts implement the Bayesian continuous-time multi-state (Markov) models used to evaluate the intervention and seasonal effects on ESBL-E transmission dynamics:
 
 | Script | Scenario | Model description |
@@ -69,6 +63,14 @@ The following Stan-based model scripts implement the Bayesian continuous-time mu
 | `/Scripts/Final_Stan_Codes/S2_Two_Step_Spline.R` | Model 3B | Two-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
 | `/Scripts/Final_Stan_Codes/S1_One_Step_Spline.R` | Model 4B | One-step intervention; cubic B-spline seasonal effect; intervention affects acquisition and decolonisation |
 
+### Stan model output analyses and WASH exploratory analyses
+These R scripts were used to analyse the markov model output, as well as the change in WASH and association between WASH and ESBL-E acquisition.
+
+ 1)  "/Scripts/2_scenario_fit_comparison.R": Computes and compares model diagnostics (including LOO, R-hat, and divergence statistics) for all model scenarios.
+ 2)  "/Scripts/3_analyses_change_WASH.R": Fits the quasi-Poisson regression model to estimate pre-/post intervention changes in household WASH indicators.
+ 3)  "/Scripts/4_CoxModel_WASH.R": Fits Cox proportional hazards mixed-effects models to estimate associations between household WASH indicators and ESBL-E acquisition and plots results. 
+ 9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses and Markov models. 
+    
 # Other related publications
 1) [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
 2) Ingelbeen B., Valia D. et al., *Effect of a community-based intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo: a cluster randomized controlled trial* (preprint).

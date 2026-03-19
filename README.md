@@ -9,9 +9,13 @@ https://clinicaltrials.gov/ct2/show/NCT05378880
 # Project summary
 We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce household-level transmission of AMR bacteria. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo.
 
-The *primary outcomes* were the change in Watch antibiotic provision from informal and formal medicine providers and change in patient management, assessed via patient exit interviews and simulated client visits. Code available here: https://github.com/ingelbeen/cabu_intervention
+The *primary outcomes* were
+- the change in Watch antibiotic provision from informal and formal medicine providers, assessed via patient exit interviews. Code available here: https://github.com/ingelbeen/cabu_intervention
+- the change in AMR acquisition dynamics, assessed using a pre-/post-intervention household survey collecting repeated microbiological (stool) samples among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. Code available in this repository.
 
-The *secondary outcomes* (which we uniquely did power for) were the changes in AMR acquisition dynamics, and hygiene practices, which were assessed using a pre-/post-intervention household survey collecting repeated microbiological (stool) samples among household members (collected 3-months before, at intervention start, 3 months post, and 9 months post-intervention start and data on Water access, Sanitation and Hygiene (WASH) exposures. These data were collected and evaluated in the Burkina Faso site using a continious-time markov modelling framework. Code available in this repository.
+The *secondary outcomes*  included
+-  Change in patient management, through pre-/post-intervention simulated client visits, code available here: https://github.com/ingelbeen/cabu_intervention
+-  Change in hygiene practices, measured with data on Water access, Sanitation and Hygiene (WASH) exposures. Code available in this repository.
 
 # Timeline
 CABU-EICO study: 1 May 2022 to 30 April 2025. 

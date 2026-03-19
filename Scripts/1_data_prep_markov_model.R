@@ -463,6 +463,10 @@ ids_missing_r1 <- data_complete %>%
 
 length(ids_missing_r1)  # should be 17
 
+data_complete %>% filter(menage_id_member %in% ids_missing_r1) %>%
+  group_by(intervention.text) %>%
+  summarise(n_members = n_distinct(menage_id_member), .groups = "drop")
+
 # Prevalence to use for imputation
 #    Prefer baseline (Round 1) prevalence among those who actually have Round 1.
 p_baseline <- data_complete %>%

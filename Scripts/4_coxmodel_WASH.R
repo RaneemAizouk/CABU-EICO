@@ -475,6 +475,8 @@ df_forest <- coef_df %>%
     HR_50_high = exp(estimate + 0.674 * std.error),
     HR_80_low  = exp(estimate - 1.2816 * std.error),
     HR_80_high = exp(estimate + 1.2816 * std.error),
+    HR_90_low   = exp(estimate - 1.645 * std.error),
+    HR_90_high  = exp(estimate + 1.645 * std.error),
     HR_95_low  = exp(estimate - 1.96 * std.error),
     HR_95_high = exp(estimate + 1.96 * std.error),
     term       = factor(term, levels = ordered_terms),
@@ -501,21 +503,15 @@ p <- ggplot(df_forest, aes(x = HR, y = fct_rev(label))) +
   
   # 95% CI bar
   geom_rect(aes(xmin = HR_95_low, xmax = HR_95_high,
-                ymin = as.numeric(fct_rev(label)) - 0.3,
-                ymax = as.numeric(fct_rev(label)) + 0.3,
-                fill = "95% CI"), alpha = 0.4) +
-  
-  # 80% CI bar
-  geom_rect(aes(xmin = HR_80_low, xmax = HR_80_high,
                 ymin = as.numeric(fct_rev(label)) - 0.2,
                 ymax = as.numeric(fct_rev(label)) + 0.2,
-                fill = "80% CI"), alpha = 0.6) +
+                fill = "95% CI"), alpha = 0.6) +
   
-  # 50% CI bar
-  geom_rect(aes(xmin = HR_50_low, xmax = HR_50_high,
-                ymin = as.numeric(fct_rev(label)) - 0.1,
-                ymax = as.numeric(fct_rev(label)) + 0.1,
-                fill = "50% CI"), alpha = 0.8) +
+  # 90% CI bar
+  geom_rect(aes(xmin = HR_90_low, xmax = HR_90_high,
+                ymin = as.numeric(fct_rev(label)) - 0.12,
+                ymax = as.numeric(fct_rev(label)) + 0.12,
+                fill = "90% CI"), alpha = 0.6) +
   
   # Point for HR
   geom_point(size = 3, color = "black") +
@@ -533,9 +529,8 @@ geom_text(
   scale_x_continuous(limits = c(0, 3), breaks = seq(0, 3, 0.5)) +
   
   # Colors for CI shading
-  scale_fill_manual(values = c("50% CI" = "#7ca982",
-                               "80% CI" = "#cde5b2",
-                               "95% CI" = "#eeeec8")) +
+  scale_fill_manual(values = c("90% CI" = "#d9f0d3",
+                               "95% CI" = "#2f7d32")) +
   
   labs(x = "Hazard Ratio", y = NULL) +
   theme_cowplot() +
@@ -554,7 +549,7 @@ print(p)
 
 # Save plot for paper
 ggsave(
-  filename = "./Output/Figures_and_tables/Paper/Final/Figures/Figure4B_CoxModel.tiff",
+  filename = "./Output/Figures_and_tables/Paper/Resubmission/Figures/Figure4B_CoxModel.svg",
   plot     = p,
   width    = 8,   # in inches
   height   = 6,    # in inches

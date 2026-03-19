@@ -8,7 +8,7 @@
 
 # Load in packages
 pacman::p_load(dplyr, tibble, tidyr, stringr, ggplot2, posterior, rstan, readr, BayestestR,
-               tools, ggplot2, patchwork, table1, readxl, writexl, openxlsx)
+               tools, ggplot2, patchwork, table1, readxl, writexl, openxlsx, ggpubr)
 
 # SET DIRECTORY
 #DirectoryData <- "./Data/BF/clean"
@@ -287,22 +287,63 @@ compute_from_fit <- function(results_path, segs) {
   
   # seasonal term per bin
   Y_cols <- grep("^Y_hat_1_2_out\\[\\d+\\]$", names(draws), value = TRUE)
-  Y_idx  <- as.integer(stringr::str_match(Y_cols, "\\[(\\d+)\\]")[,2])
-  Y_cols <- Y_cols[order(Y_idx)]
-  Y_mat  <- as.matrix(draws[, Y_cols, drop = FALSE])  # [D x K]
+  Y_idx  <- if (length(Y_cols)) as.integer(stringr::str_match(Y_cols, "\\[(\\d+)\\]")[,2]) else integer(0)
+  if (length(Y_idx)) {
+    Y_cols <- Y_cols[order(Y_idx)]
+    Y_mat  <- as.matrix(draws[, Y_cols, drop = FALSE])  # [D x K]
+  } else {
+    Y_mat <- matrix(0, nrow = D, ncol = max(segs$idx, na.rm = TRUE))
+  }
   
   # household RE
   u_cols <- grep("^u\\[\\d+\\]$", names(draws), value = TRUE)
-  u_idx  <- as.integer(stringr::str_match(u_cols, "\\[(\\d+)\\]")[,2])
-  u_cols <- u_cols[order(u_idx)]
-  U_mat  <- as.matrix(draws[, u_cols, drop = FALSE])  # [D x H]
+  u_idx  <- if (length(u_cols)) as.integer(stringr::str_match(u_cols, "\\[(\\d+)\\]")[,2]) else integer(0)
+  if (length(u_idx)) {
+    u_cols <- u_cols[order(u_idx)]
+    U_mat  <- as.matrix(draws[, u_cols, drop = FALSE])  # [D x H]
+  } else {
+    U_mat <- matrix(0, nrow = D, ncol = max(segs$house, na.rm = TRUE))
+  }
   
-  # coefficients
+  # ----------------------------------------------------
+  # Between-household variance (from u)
+  # ----------------------------------------------------
+  
+  # variance across households for each posterior draw
+  var_u_draws <- apply(U_mat, 1, var)
+  
+  # posterior summaries
+  median_var_u <- median(var_u_draws)
+  ci_var_u     <- quantile(var_u_draws, c(0.025, 0.975))
+  
+  # SD version (often easier to interpret)
+  sd_u_draws <- sqrt(var_u_draws)
+  
+  median_sd_u <- median(sd_u_draws)
+  ci_sd_u     <- quantile(sd_u_draws, c(0.025, 0.975))
+  
+  hh_variance_tbl <- tibble(
+    Parameter = c("between-household SD (u)",
+                  "between-household variance (u)"),
+    Median = c(median_sd_u,
+               median_var_u),
+    `2.5% CrI`  = c(ci_sd_u[1],
+                    ci_var_u[1]),
+    `97.5% CrI` = c(ci_sd_u[2],
+                    ci_var_u[2])
+  )
+  
+  # acquisition (1->2) params (for lambda LP)
   q12_base <- draws[["q_1_2_base"]]
   b_age    <- draws[["beta_1_2_age"]]
   b_sex    <- draws[["beta_1_2_sexe"]]
-  d_int1   <- draws[["beta_int1_1"]]  # early intv beta
-  d_int2   <- draws[["beta_int1_2"]]  # late  intv beta
+  d_int1   <- draws[["beta_int1_1"]]
+  d_int2   <- draws[["beta_int1_2"]]
+  
+  # decolonisation (2->1) params (rebuild mu deterministically)
+  q21_base <- draws[["q_2_1_base"]]
+  b2_age   <- draws[["beta_2_1_age"]]
+  b2_sex   <- draws[["beta_2_1_sexe"]]
   
   # linear predictor per segment row
   Y_by_row   <- Y_mat[, segs$idx,   drop = FALSE]
@@ -320,23 +361,36 @@ compute_from_fit <- function(results_path, segs) {
   if (length(ix_I1)) int_eff[, ix_I1] <- matrix(d_int1, nrow = D, ncol = length(ix_I1))
   if (length(ix_I2)) int_eff[, ix_I2] <- matrix(d_int2, nrow = D, ncol = length(ix_I2))
   
+  # lambda: per-day acquisition hazard per row, per draw
   lambda <- exp(LP + int_eff)
   Dur    <- matrix(segs$dur, nrow = D, ncol = R, byrow = TRUE)
   
+  # Rebuild log-mu (decolonisation) using the same row-matrix convention
+  BASE21   <- matrix(q21_base, nrow = D, ncol = R)
+  LOGMU    <- BASE21 + U_by_row + (b2_age * AGE_by_row) + (b2_sex * SEX_by_row)
+  MU_mat   <- exp(LOGMU)   # per-day decolonisation hazard per row, per draw
+  
+  # Sum weighted by duration
   sum_w <- function(mat, idx) {
     if (length(idx)) rowSums(mat[, idx, drop=FALSE]) else rep(NA_real_, D)
   }
-  rate_from_rows <- function(idx) {
+  rate_from_rows <- function(mat, idx) {
+    # mat should be a [D x R] matrix of per-day hazards (lambda or mu)
     if (!length(idx)) return(rep(NA_real_, D))
-    num <- sum_w(lambda * Dur, idx)
+    num <- sum_w(mat * Dur, idx)
     den <- sum(segs$dur[idx])
     num / den
   }
   
   ## Phase-specific rates (I0/I1/I2) for Intervention
-  R_I0 <- rate_from_rows(ix_I0)  # Intervention baseline
-  R_I1 <- rate_from_rows(ix_I1)  # Intervention early post
-  R_I2 <- rate_from_rows(ix_I2)  # Intervention late post
+  R_I0 <- rate_from_rows(lambda, ix_I0)  # Intervention baseline
+  R_I1 <- rate_from_rows(lambda, ix_I1)  # Intervention early post
+  R_I2 <- rate_from_rows(lambda, ix_I2)  # Intervention late post
+  
+  ## Phase-specific mu (decolonisation) for Intervention
+  MU_I0 <- rate_from_rows(MU_mat, ix_I0)
+  MU_I1 <- rate_from_rows(MU_mat, ix_I1)
+  MU_I2 <- rate_from_rows(MU_mat, ix_I2)
   
   # calendar weights from intervention for time-matching controls
   weights_from_I <- function(ix) {
@@ -350,29 +404,43 @@ compute_from_fit <- function(results_path, segs) {
   w_I1 <- weights_from_I(ix_I1)
   w_I2 <- weights_from_I(ix_I2)
   
-  # control per-bin hazards
+  # control per-bin hazards (λ) and per-bin mu (μ)
   ix_C_all  <- which(segs$group=="Control")
   ctrl_bins <- sort(unique(segs$idx[ix_C_all]))
-  H_C <- sapply(ctrl_bins, function(j) {
-    jj  <- ix_C_all[segs$idx[ix_C_all] == j]
-    num <- sum_w(lambda * Dur, jj)
-    den <- sum(segs$dur[jj])
-    num / den
-  })
-  if (is.null(dim(H_C))) H_C <- matrix(H_C, nrow=D)
-  colnames(H_C) <- as.character(ctrl_bins)
   
-  std_rate <- function(wlist) {
-    common <- intersect(colnames(H_C), as.character(wlist$idx))
+  H_C_lambda <- sapply(ctrl_bins, function(j) {
+    jj  <- ix_C_all[segs$idx[ix_C_all] == j]
+    rate_from_rows(lambda, jj)
+  })
+  # ensure shape is [D x B]
+  if (is.null(dim(H_C_lambda))) H_C_lambda <- matrix(H_C_lambda, nrow=D)
+  colnames(H_C_lambda) <- as.character(ctrl_bins)
+  
+  H_C_mu <- sapply(ctrl_bins, function(j) {
+    jj  <- ix_C_all[segs$idx[ix_C_all] == j]
+    rate_from_rows(MU_mat, jj)
+  })
+  if (is.null(dim(H_C_mu))) H_C_mu <- matrix(H_C_mu, nrow=D)
+  colnames(H_C_mu) <- as.character(ctrl_bins)
+  
+  # standardised control rate (time-matched) for a given weights list (works for lambda or mu)
+  std_rate <- function(H_C_mat, wlist) {
+    common <- intersect(colnames(H_C_mat), as.character(wlist$idx))
     if (!length(common)) return(rep(NA_real_, D))
-    H <- H_C[, match(common, colnames(H_C)), drop = FALSE]
+    H <- H_C_mat[, match(common, colnames(H_C_mat)), drop = FALSE]
     w <- wlist$w[match(as.integer(common), wlist$idx)]
     w <- w / sum(w)
     as.vector(H %*% w)
   }
-  Rt_C0 <- std_rate(w_I0)  # Control baseline (time-matched)
-  Rt_C1 <- std_rate(w_I1)  # Control early post
-  Rt_C2 <- std_rate(w_I2)  # Control late post
+  
+  # pass H_C_lambda as first arg
+  Rt_C0 <- std_rate(H_C_lambda, w_I0)  # Control baseline (time-matched)
+  Rt_C1 <- std_rate(H_C_lambda, w_I1)  # Control early post
+  Rt_C2 <- std_rate(H_C_lambda, w_I2)  # Control late post
+  
+  Mu_C0 <- std_rate(H_C_mu, w_I0)      # Control baseline μ (time-matched)
+  Mu_C1 <- std_rate(H_C_mu, w_I1)      # Control early post μ
+  Mu_C2 <- std_rate(H_C_mu, w_I2)      # Control late post μ
   
   ## Overall post-intervention rates as duration-weighted average of phase 1 & 2
   T1 <- sum(segs$dur[ix_I1])
@@ -381,6 +449,9 @@ compute_from_fit <- function(results_path, segs) {
   
   R_I_overall  <- (R_I1 * T1 + R_I2 * T2) / T_post
   Rt_C_overall <- (Rt_C1 * T1 + Rt_C2 * T2) / T_post
+  
+  MU_I_overall  <- (MU_I1 * T1 + MU_I2 * T2) / T_post
+  Mu_C_overall  <- (Mu_C1 * T1 + Mu_C2 * T2) / T_post
   
   # Raw post-only IRR (Int vs Ctrl), per draw
   IRR_overall_raw_draws <- R_I_overall / Rt_C_overall
@@ -401,6 +472,18 @@ compute_from_fit <- function(results_path, segs) {
     lo     = qsum(DiD_overall_draws)["lo.2.5%"],
     hi     = qsum(DiD_overall_draws)["hi.97.5%"]
   )
+  
+  # Equilibrium prevalence p* = lambda / (lambda + mu) (per draw)
+  # Phase-specific
+  p_I0 <- R_I0 / (R_I0 + MU_I0)
+  p_I1 <- R_I1 / (R_I1 + MU_I1)
+  p_I2 <- R_I2 / (R_I2 + MU_I2)
+  p_I_overall <- R_I_overall / (R_I_overall + MU_I_overall)
+  
+  p_C0 <- Rt_C0 / (Rt_C0 + Mu_C0)
+  p_C1 <- Rt_C1 / (Rt_C1 + Mu_C1)
+  p_C2 <- Rt_C2 / (Rt_C2 + Mu_C2)
+  p_C_overall <- Rt_C_overall / (Rt_C_overall + Mu_C_overall)
   
   ## ----------------------------------------
   ## Per-draw incidence per 100 PD (for plotting)
@@ -484,6 +567,7 @@ compute_from_fit <- function(results_path, segs) {
   ## ----------------------------------------
   
   list(
+    hh_variance              = hh_variance_tbl,
     rates_draws              = rates_draws,
     rates_cri                = rates_cri,
     
@@ -502,10 +586,29 @@ compute_from_fit <- function(results_path, segs) {
     IRR_overall_raw_draws    = IRR_overall_raw_draws,
     DiD_overall_draws        = DiD_overall_draws,
     IRR_overall_raw_summary  = overall_raw_irr,
-    IRR_overall_did_summary  = overall_did_irr
+    IRR_overall_did_summary  = overall_did_irr,
+    
+    # incidence outputs (per-person per-day draws)
+    R_I0 = R_I0, R_I1 = R_I1, R_I2 = R_I2, R_I_overall = R_I_overall,
+    Rt_C0 = Rt_C0, Rt_C1 = Rt_C1, Rt_C2 = Rt_C2, Rt_C_overall = Rt_C_overall,
+    
+    # decolonisation (mu) outputs
+    MU_I0 = MU_I0, MU_I1 = MU_I1, MU_I2 = MU_I2, MU_I_overall = MU_I_overall,
+    Mu_C0 = Mu_C0, Mu_C1 = Mu_C1, Mu_C2 = Mu_C2, Mu_C_overall = Mu_C_overall,
+    
+    # reconstructed matrices (per-draw x per-row)
+    lambda = lambda,    # per-day acquisition [D x R]
+    MU_mat = MU_mat,    # per-day decolonisation [D x R]
+    Dur = Dur,
+    
+    # equilibrium prevalence (per draw)
+    p_eq = tibble(
+      draw = seq_len(D),
+      p_I0 = p_I0, p_I1 = p_I1, p_I2 = p_I2, p_I_overall = p_I_overall,
+      p_C0 = p_C0, p_C1 = p_C1, p_C2 = p_C2, p_C_overall = p_C_overall,
+    )
   )
 }
-
 
 #------------------------------------------------------------------------------
 # PLOTTING
@@ -595,7 +698,7 @@ plot_incidence_panel <- function(data_list,
   rates_draws <- data_list$rates_draws
   ann_box     <- data_list$ann_box
   
-  # ---- Recode phases ----
+  # Recode phases
   recode_phase <- function(x) dplyr::case_when(
     x %in% c("Pre-intervention","Baseline") ~ "Baseline",
     x %in% c("3-months\npost-intervention","Post-Intervention 1","Phase 1") ~
@@ -607,7 +710,7 @@ plot_incidence_panel <- function(data_list,
     TRUE ~ as.character(x)
   )
   
-  # ---- Prepare plot data ----
+  # Prepare plot data 
   rates_draws <- rates_draws %>%
     mutate(
       phase_disp = recode_phase(as.character(phase_label)),
@@ -630,7 +733,7 @@ plot_incidence_panel <- function(data_list,
       y_plot     = pmin(ypos, 0.98 * upper_cap)
     )
   
-  # ---- Plot ----
+  # Plot 
   ggplot(
     rates_draws,
     aes(x = phase_disp, y = ID12_per100, fill = Group)
@@ -694,6 +797,8 @@ plot_incidence_panel <- function(data_list,
 # THIS CODE WORKS ONE THE MODEL OUTPUT WHICH IS NOT STORED ON GITHUB AS NON-ANONYMISED
 #---------------------------------------------------------------------------------------------
 
+rm(list=c("var"))
+
 # Inputs
 results_path_1 <- "./Output/Model_results/Observed_data/Two_step_sine_NonAdd_NonCol_seasonalityobserved.rds"
 results_path_2 <- "./Output/Model_results/Observed_data/One_step_sine_NonAdd_NonCol_seasonalityobserved.rds"  # example
@@ -717,6 +822,20 @@ data_s1$rates_draws; data_s1$rates_cri; data_s1$hr_tbl
 
 data_s1$hr_tbl_HR
 
+hh_variance_tbl <- bind_rows(
+  data_s1$hh_variance %>% mutate(Scenario = "Scenario1"),
+  data_s2$hh_variance %>% mutate(Scenario = "Scenario2")
+) %>%
+  select(Scenario, Parameter, Median, `2.5% CrI`, `97.5% CrI`)
+hh_variance_tbl
+
+write.csv(
+  hh_variance_tbl,
+  "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/hh_variance_summary.csv",
+  row.names = FALSE
+)
+
+
 write.csv(data_s1$HR1_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/HR1_draws_s1.csv")
 write.csv(data_s1$HR2_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/HR2_draws_s1.csv")
 
@@ -735,86 +854,99 @@ write.csv(data_s2$hr_tbl,      "./Output/Model_results/Model_summaries/Observed_
 # CALCULATE PROBABILITY OF AN EFFECT
 #----------------------------------------------------------------------------------
 
+
 # Summarize a posterior draw vector with ROPE and direction probabilities
+# - Treats rope[1] as the meaningful-benefit threshold (e.g. 0.9)
+# - Reports: P(HR < 1), P(HR > 1), P(HR < rope[1]) (meaningful benefit),
+#   P(rope[1] <= HR <= 1) (trivial/near-null benefit), and proportion > 1 (harm).
 summarise_posterior_effect <- function(draws,
                                        parameter_name,
                                        rope = c(0.9, 1.1),
                                        cred_probs = c(0.025, 0.5, 0.975)) {
   # draws: numeric vector of posterior draws for an effect on the ratio scale (HR or IRR)
   # parameter_name: string label
-  # rope: numeric vector length 2 giving ROPE bounds (on ratio scale)
+  # rope: numeric vector length 2 giving ROPE bounds (on ratio scale). 
+  #       Convention here: rope[1] = lower bound for "meaningful benefit" (e.g. 0.9).
   # returns: tibble row with summaries
   
   draws <- as.numeric(draws)
   draws <- draws[is.finite(draws)]
   if (length(draws) == 0) {
-    return(tibble(
+    return(tibble::tibble(
       parameter = parameter_name,
       median = NA_real_, lo = NA_real_, hi = NA_real_,
       p_less_than_1 = NA_real_, p_greater_than_1 = NA_real_,
-      prop_in_ROPE = NA_real_, rope_lower = rope[1], rope_upper = rope[2]
+      p_meaningful_benefit = NA_real_,   # P(HR < rope[1])
+      p_trivial_benefit = NA_real_,      # P(rope[1] <= HR <= 1)
+      p_harm = NA_real_,                 # P(HR > 1)
+      prop_in_symmetric_ROPE = NA_real_, # old symmetric ROPE (rope[1], rope[2])
+      rope_lower = rope[1], rope_upper = rope[2]
     ))
   }
   
   # Basic summaries
   med <- median(draws)
-  lo  <- quantile(draws, probs = cred_probs[1])
-  hi  <- quantile(draws, probs = cred_probs[3])
+  lo  <- as.numeric(stats::quantile(draws, probs = cred_probs[1], names = FALSE))
+  hi  <- as.numeric(stats::quantile(draws, probs = cred_probs[3], names = FALSE))
   
-  # Direction probabilities
+  # Direction probabilities (classic)
   p_lt1 <- mean(draws < 1)   # P(HR < 1)
   p_gt1 <- mean(draws > 1)   # P(HR > 1)
   
-  # ROPE proportion (using bayestestR result or simple calculation)
-  # bayestestR::rope returns an object; we compute proportion directly for clarity
-  prop_rope <- mean(draws > rope[1] & draws < rope[2])
+  # Asymmetric decision quantities
+  p_meaningful <- mean(draws < rope[1])                      # P(HR < meaningful threshold)
+  p_trivial     <- mean(draws >= rope[1] & draws <= 1)       # P(trivial benefit: between threshold and 1)
+  p_harm        <- mean(draws > 1)                           # P(harm)
   
-  tibble(
+  # Keep symmetric ROPE proportion for backward compatibility if user still wants it
+  prop_rope_sym <- mean(draws > rope[1] & draws < rope[2])
+  
+  tibble::tibble(
     parameter = parameter_name,
     median = med,
-    lo = as.numeric(lo),
-    hi = as.numeric(hi),
+    lo = lo,
+    hi = hi,
     p_less_than_1 = p_lt1,
     p_greater_than_1 = p_gt1,
-    prop_in_ROPE = prop_rope,
+    p_meaningful_benefit = p_meaningful,
+    p_trivial_benefit = p_trivial,
+    p_harm = p_harm,
+    prop_in_symmetric_ROPE = prop_rope_sym,
     rope_lower = rope[1],
     rope_upper = rope[2]
   )
 }
 
-# Example: apply to results returned by compute_from_fit()
-# assume 'out' is the list returned by compute_from_fit(...)
-# e.g. out <- compute_from_fit(results_path, segs)
-
-out1 = data_s1
-out2 = data_s2
-
+# Update make_rope_report unchanged except it will now collect the new columns
 make_rope_report <- function(out, rope = c(0.9, 1.1)) {
   # Collect candidate draw vectors (ratio-scale)
   named_draws <- list(
-    "HR_phase1 (model beta)"      = out$HR1_draws,
-    "HR_phase2 (model beta)"      = out$HR2_draws,
-    "IRR_phase1 (incidence DiD)"  = out$IRR1_draws,
-    "IRR_phase2 (incidence DiD)"  = out$IRR2_draws,
-    "DiD_phase1 (baseline-adjust)"= out$DiD1_draws,
-    "DiD_phase2 (baseline-adjust)"= out$DiD2_draws,
-    "Overall_post_IRR (raw)"      = out$IRR_overall_raw_draws,
-    "Overall_post_DiD"            = out$DiD_overall_draws
+    "HR_phase1"      = out$HR1_draws,
+    "HR_phase2"      = out$HR2_draws,
+    "IRR_phase1 (DiD)"= out$DiD1_draws,
+    "IRR_phase2 (DiD)"= out$DiD2_draws,
+    "IRR_overall (DiD)" = out$DiD_overall_draws
   )
   
   report_rows <- lapply(names(named_draws), function(nm) {
     d <- named_draws[[nm]]
     summarise_posterior_effect(d, parameter_name = nm, rope = rope)
   })
-  report_df <- bind_rows(report_rows)
-  # Add human-readable percent columns
+  report_df <- dplyr::bind_rows(report_rows)
+  # Add human-readable percent columns (rounded)
   report_df %>%
-    mutate_at(vars(p_less_than_1, p_greater_than_1, prop_in_ROPE),
-              ~ round(100 * ., 1))
+    dplyr::mutate(
+      dplyr::across(
+        c(p_less_than_1, p_greater_than_1, p_meaningful_benefit,
+          p_trivial_benefit, p_harm, prop_in_symmetric_ROPE),
+        ~ round(100 * ., 1)
+      )
+    )
 }
 
-rope_report1 <- make_rope_report(out1, rope = c(0.9, 1.1))
-rope_report2 <- make_rope_report(out2, rope = c(0.9, 1.1))
+# Example usage (as before)
+rope_report1 <- make_rope_report(data_s1, rope = c(0.9, 1.1))
+rope_report2 <- make_rope_report(data_s2, rope = c(0.9, 1.1))
 
 print(rope_report1)
 print(rope_report2)
@@ -827,9 +959,9 @@ write_rope_to_excel <- function(report_df, file = "rope_report.xlsx", sheet = "R
   saveWorkbook(wb, file, overwrite = TRUE)
 }
 
-# Run for two fitted results and combine (if you have two)
-rep1 <- make_rope_report(out1, rope = c(0.9, 1.1)) %>% mutate(model = "scenario_1")
-rep2 <- make_rope_report(out2, rope = c(0.9, 1.1)) %>% mutate(model = "scenario_2")
+# Run for two fitted results and combine
+rep1 <- make_rope_report(data_s1, rope = c(0.9, 1.1)) %>% mutate(model = "scenario_1")
+rep2 <- make_rope_report(data_s2, rope = c(0.9, 1.1)) %>% mutate(model = "scenario_2")
 combined <- bind_rows(rep1, rep2) %>% select(model, everything())
 write_rope_to_excel(combined, file = "./Output/Figures_and_tables/Paper/Resubmission/rope_combined.xlsx")
 
@@ -913,7 +1045,7 @@ p_both
 # STORE Figure 2
 #----------------------------------------------------------------------------------
 ggsave(
-    filename = "./Output/Figures_and_tables/Paper/Final/Figures/Figure3_Intervention_effect_baseline.tiff",
+    filename = "./Output/Figures_and_tables/Paper/Resubmission/Figures/Figure2_Intervention_effect_baseline.svg",
     plot     = p_both,
     width    = 15,   # in inches
     height   = 6,    # in inches
@@ -940,9 +1072,9 @@ ratio
 median(exp(D$q_2_1_base))
 
 # Number of individuals with four observations
-dfls0complete %>% group_by(intervention.text) %>%
-  summarise(n = length(unique(menage_id_member))
-  )
+#dfls0complete %>% group_by(intervention.text) %>%
+#  summarise(n = length(unique(menage_id_member))
+#  )
 
 data_source = "observed"
 global_interval_start <- ifelse(data_source=="simulated", as.Date("2022-10-01"), as.Date("2022-10-03"))
@@ -1035,8 +1167,8 @@ plot_phase_curve <- function(
         inherit.aes = FALSE, fill = "forestgreen", alpha = 0.10
       )
     } +
-    geom_ribbon(aes(ymin = q_low, ymax = q_hi), alpha = 0.25, fill = "cyan4") +
-    geom_line(linewidth = 2, color = "cyan4") +
+    geom_ribbon(aes(ymin = q_low, ymax = q_hi), alpha = 0.25, fill = "coral2") +
+    geom_line(linewidth = 2, color = "coral2") +
     { if (show_hr1) geom_hline(yintercept = 1, linetype = "dashed", linewidth = 0.9) }
   
   # Dynamic axis limits with extra space BELOW 0 so the label is visible
@@ -1298,7 +1430,7 @@ p_season
 #-----------------------------------------------------------------------------
 
 ggsave(
-  filename = "./Output/Figures/Paper/Final/Figures/Figure4A_Seasonal_effect_basecase.tiff",
+  filename = "./Output/Figures_and_tables/Paper/Resubmission/Figures/Figure3A_Seasonal_effect_basecase.svg",
   plot     = p_season,
   width    = 12,   # in inches
   height   = 9,    # in inches
@@ -2069,55 +2201,3 @@ ggsave(
 writexl::write_xlsx(vill_irr_tbl , path = "./Output/Figures_and_tables/Paper/Final/Table_S3_Village_level_IRR.xlsx")
 #write_csv(Inc_final, file = "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/inc_s1.csv")
 
-
-# Provide household-level variation
-#-------------------------------------------------------------------------------
-
-summarise_hh_variance <- function(fit, scenario_name) {
-  post_list <- rstan::extract(fit, pars = c("sigma_u","u"), permuted = TRUE)
-  
-  sigma_u_draws <- post_list$sigma_u
-  u_draws_matrix <- as.matrix(post_list$u)
-  
-  # SD
-  median_sd  <- median(sigma_u_draws)
-  ci_sd      <- quantile(sigma_u_draws, c(0.025, 0.975))
-  
-  # Variance
-  var_draws  <- sigma_u_draws^2
-  median_var <- median(var_draws)
-  ci_var     <- quantile(var_draws, c(0.025, 0.975))
-  
-  # Empirical variance across households
-  var_u_by_draw <- apply(u_draws_matrix, 1, var)
-  median_emp_var <- median(var_u_by_draw)
-  ci_emp_var     <- quantile(var_u_by_draw, c(0.025, 0.975))
-  
-  tibble(
-    Scenario = scenario_name,
-    Parameter = c("sigma_u (SD)",
-                  "sigma_u^2 (variance)",
-                  "empirical_var_u (from u)"),
-    Median = c(median_sd, median_var, median_emp_var),
-    `2.5% CrI`  = c(ci_sd[1], ci_var[1], ci_emp_var[1]),
-    `97.5% CrI` = c(ci_sd[2], ci_var[2], ci_emp_var[2])
-  )
-}
-
-# Load models
-fit1 <- readRDS(results_path_1)
-fit2 <- readRDS(results_path_2)
-
-# Create combined table
-res1 <- summarise_hh_variance(fit1, "Scenario_1")
-res2 <- summarise_hh_variance(fit2, "Scenario_2")
-
-combined_table <- bind_rows(res1, res2)
-
-# Write single Excel file with one sheet
-write.xlsx(
-  combined_table,
-  file = "./Output/Figures_and_tables/Paper/Resubmission/Table_between_household_variance_summary.xlsx",
-  sheetName = "HH_variance",
-  overwrite = TRUE
-)

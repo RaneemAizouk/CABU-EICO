@@ -15,7 +15,7 @@ The *primary outcomes* were
 
 The *secondary outcomes*  included
 -  Change in patient management, through pre-/post-intervention simulated client visits, code available here: https://github.com/ingelbeen/cabu_intervention
--  Change in hygiene practices, measured with data on Water access, Sanitation and Hygiene (WASH) exposures. Code available in this repository.
+-  Change in hygiene practices, measured with data on Water access, Sanitation and Hygiene (WASH) exposures collected through pre-/post-intervention household surveys. Code available in this repository.
 
 # Timeline
 CABU-EICO study: 1 May 2022 to 30 April 2025. 

@@ -7,8 +7,8 @@
 # Author: Esther van Kleef
 
 # Load in packages
-pacman::p_load(dplyr, tibble, tidyr, stringr, ggplot2, posterior, rstan, readr, 
-               tools, ggplot2, patchwork, table1, readxl, writexl)
+pacman::p_load(dplyr, tibble, tidyr, stringr, ggplot2, posterior, rstan, readr, BayestestR,
+               tools, ggplot2, patchwork, table1, readxl, writexl, openxlsx)
 
 # SET DIRECTORY
 #DirectoryData <- "./Data/BF/clean"
@@ -17,6 +17,10 @@ DirectoryData <- "./Public_data/Observed"
 #load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_all.rda"))
 # load(paste0(DirectoryData,"/use_in_analyses/bf_esbl0123_long_completecases.rda"))
 dfls0 <- readRDS("./Public_data/Observed/bf_esbl0123_long_all.rds")
+
+# pseudoIDs
+#pid <- read.csv("./Data/BF/clean/use_in_analyses/PseudoID_key_BF_data.csv")
+
 #------------------------------------------------------------------------------
 # Descriptive tables
 #------------------------------------------------------------------------------
@@ -62,6 +66,19 @@ dfls0 = dfls0 %>% mutate(
   agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
 )
 
+# Add strata (health centre vs no health centre) 
+#--------------------------------------------------------
+#village_name = pid %>%select(c(village_name,village_code)) %>% filter(!duplicated(village_code))
+#dfls0 = left_join(dfls0, village_name)
+#unique(dfls0$village_name)
+#dfls0 <- dfls0 %>%  mutate(strata = ifelse(village_name %in% c("BOLOGHO", "KOURIA", "LALLE","PELLA",  "SIGLE", 
+#                                                                  "KOKOLO", "NANORO", "NAZOANGA", "POESSE", "SOUM", 
+#                                                                  "SEGUEDIN", "SOALA", "SOAW"),  "healthcentre", "nohealthcentre")) # it distinguished the villages with a health centre run by the govt, versus those with only other (formal or informal) medicine outlets
+#table(dfls0$village_name, dfls0$strata)
+#names(dfls0)
+#dfls0 = dfls0 %>%select(-c(village_name))
+#saveRDS(dfls0, "./Public_data/Observed/bf_esbl0123_long_all.rds")
+
 # dfls0complete = dfls0complete %>% mutate(
 #   agegr = factor(agegr, levels=c("0-4", "5-17", "18-49", "50+"))
 # )
@@ -88,10 +105,25 @@ d2 = dfls0 %>% group_by(round, intervention.text, esble) %>%
 da = left_join(d2, d)
 da$prev = da$n/da$n_denom
 
-da_control = da %>% filter(intervention.text == "Control")
+da_control = da %>% filter(intervention.text == "control")
 median(da_control$prev[da_control$esble==1])
 
 da %>% filter(round==1)
+
+# ESBL by randomisation strata
+d = dfls0 %>% group_by(round, strata) %>%
+  summarise(n_denom = n()) 
+
+d2 = dfls0 %>% group_by(round, strata, esble) %>%
+  summarise(n = n())
+
+da = left_join(d2, d)
+da$prev = da$n/da$n_denom
+
+round1 <- da %>% filter(round==1)
+
+# Save file
+write_xlsx(round1, "Output/Figures_and_tables/Paper/Resubmission/Table_S2_prevalence_strata.xlsx")
 
 #------------------------------------------------------------------------------
 # WASH Tables
@@ -103,7 +135,7 @@ tableS4 = table1(~ main.drinking.water.dry.binary +
                    correct.handwashing.binary +
                    improved.sanitation.binary + 
                    livestock.access.house.binary + 
-                    animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==1))
+                    animal.excrement.floor.binary| factor(intervention.text), data=hh%>%filter(round==1))
 tableS4
 
 tableS4_stool = table1(~ main.drinking.water.dry.binary +
@@ -111,7 +143,7 @@ tableS4_stool = table1(~ main.drinking.water.dry.binary +
                    correct.handwashing.binary +
                    improved.sanitation.binary + 
                    livestock.access.house.binary + 
-                   animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==1, stool.collect==1))
+                   animal.excrement.floor.binary| factor(intervention.text), data=hh%>%filter(round==1, stool.collect==1))
 tableS4_stool
 
 # Post-intervention
@@ -120,7 +152,7 @@ tableS4post = table1(~ main.drinking.water.dry.binary +
                    correct.handwashing.binary +
                    improved.sanitation.binary + 
                    livestock.access.house.binary + 
-                   animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==4))
+                   animal.excrement.floor.binary| factor(intervention.text), data=hh%>%filter(round==4))
 tableS4post
 
 tableS4_stoolpost = table1(~ main.drinking.water.dry.binary +
@@ -128,7 +160,7 @@ tableS4_stoolpost = table1(~ main.drinking.water.dry.binary +
                          correct.handwashing.binary +
                          improved.sanitation.binary + 
                          livestock.access.house.binary + 
-                         animal.excrement.floor.binary| factor(intervention.text), data=wash%>%filter(round==4, stool.collect==1))
+                         animal.excrement.floor.binary| factor(intervention.text), data=hh%>%filter(round==4, stool.collect==1))
 tableS4_stoolpost
 
 tableS4_df <- as.data.frame(tableS4)
@@ -685,15 +717,121 @@ data_s1$rates_draws; data_s1$rates_cri; data_s1$hr_tbl
 
 data_s1$hr_tbl_HR
 
+write.csv(data_s1$HR1_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/HR1_draws_s1.csv")
+write.csv(data_s1$HR2_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/HR2_draws_s1.csv")
+
 write.csv(data_s1$rates_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/rates_draws_s1.csv")
 write.csv(data_s1$rates_cri,   "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/rates_summary_s1.csv")
 write.csv(data_s1$hr_tbl,      "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/hr_tbl_s1.csv")
 
 data_s2$rates_draws; data_s2$rates_cri; data_s2$hr_tbl
-write.csv(data_s1$rates_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/rates_draws_s2.csv")
-write.csv(data_s1$rates_cri,   "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/rates_summary_s2.csv")
-write.csv(data_s1$hr_tbl,      "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/hr_tbl_s2.csv")
+write.csv(data_s2$HR1_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/HR1_draws_s2.csv")
+write.csv(data_s2$HR2_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/HR2_draws_s2.csv")
 
+write.csv(data_s2$rates_draws, "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/rates_draws_s2.csv")
+write.csv(data_s2$rates_cri,   "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/rates_summary_s2.csv")
+write.csv(data_s2$hr_tbl,      "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario2/hr_tbl_s2.csv")
+
+# CALCULATE PROBABILITY OF AN EFFECT
+#----------------------------------------------------------------------------------
+
+# Summarize a posterior draw vector with ROPE and direction probabilities
+summarise_posterior_effect <- function(draws,
+                                       parameter_name,
+                                       rope = c(0.9, 1.1),
+                                       cred_probs = c(0.025, 0.5, 0.975)) {
+  # draws: numeric vector of posterior draws for an effect on the ratio scale (HR or IRR)
+  # parameter_name: string label
+  # rope: numeric vector length 2 giving ROPE bounds (on ratio scale)
+  # returns: tibble row with summaries
+  
+  draws <- as.numeric(draws)
+  draws <- draws[is.finite(draws)]
+  if (length(draws) == 0) {
+    return(tibble(
+      parameter = parameter_name,
+      median = NA_real_, lo = NA_real_, hi = NA_real_,
+      p_less_than_1 = NA_real_, p_greater_than_1 = NA_real_,
+      prop_in_ROPE = NA_real_, rope_lower = rope[1], rope_upper = rope[2]
+    ))
+  }
+  
+  # Basic summaries
+  med <- median(draws)
+  lo  <- quantile(draws, probs = cred_probs[1])
+  hi  <- quantile(draws, probs = cred_probs[3])
+  
+  # Direction probabilities
+  p_lt1 <- mean(draws < 1)   # P(HR < 1)
+  p_gt1 <- mean(draws > 1)   # P(HR > 1)
+  
+  # ROPE proportion (using bayestestR result or simple calculation)
+  # bayestestR::rope returns an object; we compute proportion directly for clarity
+  prop_rope <- mean(draws > rope[1] & draws < rope[2])
+  
+  tibble(
+    parameter = parameter_name,
+    median = med,
+    lo = as.numeric(lo),
+    hi = as.numeric(hi),
+    p_less_than_1 = p_lt1,
+    p_greater_than_1 = p_gt1,
+    prop_in_ROPE = prop_rope,
+    rope_lower = rope[1],
+    rope_upper = rope[2]
+  )
+}
+
+# Example: apply to results returned by compute_from_fit()
+# assume 'out' is the list returned by compute_from_fit(...)
+# e.g. out <- compute_from_fit(results_path, segs)
+
+out1 = data_s1
+out2 = data_s2
+
+make_rope_report <- function(out, rope = c(0.9, 1.1)) {
+  # Collect candidate draw vectors (ratio-scale)
+  named_draws <- list(
+    "HR_phase1 (model beta)"      = out$HR1_draws,
+    "HR_phase2 (model beta)"      = out$HR2_draws,
+    "IRR_phase1 (incidence DiD)"  = out$IRR1_draws,
+    "IRR_phase2 (incidence DiD)"  = out$IRR2_draws,
+    "DiD_phase1 (baseline-adjust)"= out$DiD1_draws,
+    "DiD_phase2 (baseline-adjust)"= out$DiD2_draws,
+    "Overall_post_IRR (raw)"      = out$IRR_overall_raw_draws,
+    "Overall_post_DiD"            = out$DiD_overall_draws
+  )
+  
+  report_rows <- lapply(names(named_draws), function(nm) {
+    d <- named_draws[[nm]]
+    summarise_posterior_effect(d, parameter_name = nm, rope = rope)
+  })
+  report_df <- bind_rows(report_rows)
+  # Add human-readable percent columns
+  report_df %>%
+    mutate_at(vars(p_less_than_1, p_greater_than_1, prop_in_ROPE),
+              ~ round(100 * ., 1))
+}
+
+rope_report1 <- make_rope_report(out1, rope = c(0.9, 1.1))
+rope_report2 <- make_rope_report(out2, rope = c(0.9, 1.1))
+
+print(rope_report1)
+print(rope_report2)
+
+# Write results
+write_rope_to_excel <- function(report_df, file = "rope_report.xlsx", sheet = "ROPE_summary") {
+  wb <- createWorkbook()
+  addWorksheet(wb, sheet)
+  writeData(wb, sheet, report_df)
+  saveWorkbook(wb, file, overwrite = TRUE)
+}
+
+# Run for two fitted results and combine (if you have two)
+rep1 <- make_rope_report(out1, rope = c(0.9, 1.1)) %>% mutate(model = "scenario_1")
+rep2 <- make_rope_report(out2, rope = c(0.9, 1.1)) %>% mutate(model = "scenario_2")
+combined <- bind_rows(rep1, rep2) %>% select(model, everything())
+write_rope_to_excel(combined, file = "./Output/Figures_and_tables/Paper/Resubmission/rope_combined.xlsx")
 
 # Plot Manuscript Figure 3
 #-------------------------------------------------------------------------------
@@ -782,6 +920,7 @@ ggsave(
     dpi      = 300,   
     bg = "white"
   )
+
 
 # PLOT SEASONAL PATTERN
 #------------------------------------------------------------
@@ -1929,3 +2068,56 @@ ggsave(
 # Store table
 writexl::write_xlsx(vill_irr_tbl , path = "./Output/Figures_and_tables/Paper/Final/Table_S3_Village_level_IRR.xlsx")
 #write_csv(Inc_final, file = "./Output/Model_results/Model_summaries/Observed_data/Summary_tables/Scenario1/inc_s1.csv")
+
+
+# Provide household-level variation
+#-------------------------------------------------------------------------------
+
+summarise_hh_variance <- function(fit, scenario_name) {
+  post_list <- rstan::extract(fit, pars = c("sigma_u","u"), permuted = TRUE)
+  
+  sigma_u_draws <- post_list$sigma_u
+  u_draws_matrix <- as.matrix(post_list$u)
+  
+  # SD
+  median_sd  <- median(sigma_u_draws)
+  ci_sd      <- quantile(sigma_u_draws, c(0.025, 0.975))
+  
+  # Variance
+  var_draws  <- sigma_u_draws^2
+  median_var <- median(var_draws)
+  ci_var     <- quantile(var_draws, c(0.025, 0.975))
+  
+  # Empirical variance across households
+  var_u_by_draw <- apply(u_draws_matrix, 1, var)
+  median_emp_var <- median(var_u_by_draw)
+  ci_emp_var     <- quantile(var_u_by_draw, c(0.025, 0.975))
+  
+  tibble(
+    Scenario = scenario_name,
+    Parameter = c("sigma_u (SD)",
+                  "sigma_u^2 (variance)",
+                  "empirical_var_u (from u)"),
+    Median = c(median_sd, median_var, median_emp_var),
+    `2.5% CrI`  = c(ci_sd[1], ci_var[1], ci_emp_var[1]),
+    `97.5% CrI` = c(ci_sd[2], ci_var[2], ci_emp_var[2])
+  )
+}
+
+# Load models
+fit1 <- readRDS(results_path_1)
+fit2 <- readRDS(results_path_2)
+
+# Create combined table
+res1 <- summarise_hh_variance(fit1, "Scenario_1")
+res2 <- summarise_hh_variance(fit2, "Scenario_2")
+
+combined_table <- bind_rows(res1, res2)
+
+# Write single Excel file with one sheet
+write.xlsx(
+  combined_table,
+  file = "./Output/Figures_and_tables/Paper/Resubmission/Table_between_household_variance_summary.xlsx",
+  sheetName = "HH_variance",
+  overwrite = TRUE
+)

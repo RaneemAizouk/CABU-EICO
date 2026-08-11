@@ -79,7 +79,7 @@ These R scripts were used to analyse the markov model output, as well as the cha
     
 # Other related publications
 1) CABU EICO Study team. Evaluating the effect of a behavioural intervention bundle on antibiotic use, quality of care, and household transmission of resistant Enterobacteriaceae in intervention versus control clusters in rural Burkina Faso and DR Congo (CABU-EICO). Trials
-. 2024 Jan 27;25(1):91. doi: 10.1186/s13063-023-07856-2. [CABU-EICO study protocol – Trials (2024)](https://pubmed.ncbi.nlm.nih.gov/38281023/)
+. 2024 Jan 27;25(1):91. [CABU-EICO study protocol DOI:](https://10.1186/s13063-023-07856-2)
 2) Ingelbeen B, Valia D, Mbangi B et al.
 Effect of a community-based behavioural intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo (CABU-EICO): a cluster-randomised controlled trial
 The Lancet Infectious Diseases, 2026; 0. [DOI:](https://doi.org/10.1016/S1473-3099(26)00169-6)

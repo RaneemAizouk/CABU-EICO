@@ -9,7 +9,7 @@ The Lancet Microbe, 2026; 0. [DOI](https://doi.org/10.1016/j.lanmic.2026.101427)
 https://clinicaltrials.gov/ct2/show/NCT05378880
 
 # Project summary
-We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, and hence reduce household-level transmission of AMR bacteria. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo.
+We developed and evaluated a behavioural intervention bundle, targeting any community-level healthcare or medicine providers and communities, to optimise antibiotic use and improve hygiene, hence reduce household-level transmission of AMR bacteria. After a 6-month local co-development phase, the intervention was implemented over 12 months in 22 clusters (villages or neighbourhoods) within health demographic surveillance sites in Nanoro, Burkina Faso and Kimpese, DR Congo. Changes in hygiene practices and AMR pathogen and gene carriage were assessed in repeated household surveys. 
 
 The *primary outcomes* were
 - the change in Watch antibiotic provision from informal and formal medicine providers, assessed via patient exit interviews. Code available here: https://github.com/ingelbeen/cabu_intervention
@@ -25,6 +25,8 @@ CABU-EICO study: 1 May 2022 to 30 April 2025.
 Household WASH survey data collection: Oct 2022 to Feb 2023 (Baseline); Oct 2023 to Feb 2024 (Post-intervention)  
 
 Household stool collection: Oct 2022 to Feb 2024 (four rounds of stool collection)
+
+Following publication of the above co-primary and secondary outcomes in Lancet Infectious Diseases and Lancet Microbe, we are now in the stage of implementing modelling and sequencing of selected human and rodent isolates, to further study quantified how changes in antibiotic use and hygiene practices impact AMR transmission. 
 
 # Public data
 

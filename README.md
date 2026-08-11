@@ -19,7 +19,7 @@ The *secondary outcomes*  included
 -  Change in patient management, through pre-/post-intervention simulated client visits, code available here: https://github.com/ingelbeen/cabu_intervention
 -  Change in hygiene practices, measured using pre-/post-intervention household survey data on Water access, Sanitation and Hygiene (WASH) exposures. Code available in this repository.
 
-Following publication of the above co-primary and secondary outcomes in [*The Lancet Infectious Diseases*](https://doi.org/10.1016/S1473-3099(26)00169-6) and [*The Lancet Microbe*](https://doi.org/10.1016/j.lanmic.2026.101427), we are now in the stage of implementing modelling and sequencing of selected human and rodent isolates, to further study quantified how changes in antibiotic use and hygiene practices impact AMR transmission and the role of the environment. 
+Following publication of the above co-primary and secondary outcomes in [*The Lancet Infectious Diseases*](https://doi.org/10.1016/S1473-3099(26)00169-6) and [*The Lancet Microbe*](https://doi.org/10.1016/j.lanmic.2026.101427), we are now in the stage of implementing modelling and sequencing of selected human and rodent isolates, to further study and quantify how changes in antibiotic use and hygiene practices impact AMR transmission and the role of the environment. 
 
 # Timeline
 CABU-EICO study: 1 May 2022 to 30 April 2025. 

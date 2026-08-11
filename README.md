@@ -3,7 +3,7 @@ This repository contains the study protocol, household survey, publicly availabl
 
 Aizouk R, Sibidou Y, Valia D et al.
 Effects of a community-based intervention bundle on household transmission of extended spectrum β-lactamase-producing Escherichia coli in rural Burkina Faso to target community-level drivers of antimicrobial resistance in sub-Saharan Africa: a cluster-randomised trial
-The Lancet Microbe, 2026; 0. [DOI:](https://doi.org/10.1016/j.lanmic.2026.101427) 
+The Lancet Microbe, 2026; 0. [DOI](https://doi.org/10.1016/j.lanmic.2026.101427) 
 
 # Study registration
 https://clinicaltrials.gov/ct2/show/NCT05378880
@@ -78,10 +78,10 @@ These R scripts were used to analyse the markov model output, as well as the cha
  9)  "/Scripts/5_figures_and_tables.R": Generates the final manuscript figures and tables by combining outputs from descriptive analyses and Markov models. 
     
 # Other related publications
-1) CABU EICO Study team. Evaluating the effect of a behavioural intervention bundle on antibiotic use, quality of care, and household transmission of resistant Enterobacteriaceae in intervention versus control clusters in rural Burkina Faso and DR Congo (CABU-EICO). Trials
-. 2024 Jan 27;25(1):91. [CABU-EICO study protocol DOI:](https://10.1186/s13063-023-07856-2)
+1) CABU EICO consortium. Evaluating the effect of a behavioural intervention bundle on antibiotic use, quality of care, and household transmission of resistant Enterobacteriaceae in intervention versus control clusters in rural Burkina Faso and DR Congo (CABU-EICO). Trials
+. 2024 Jan 27;25(1):91. [CABU-EICO study protocol, DOI](https://10.1186/s13063-023-07856-2)
 2) Ingelbeen B, Valia D, Mbangi B et al.
 Effect of a community-based behavioural intervention bundle to improve antibiotic use and patient management in Burkina Faso and DR Congo (CABU-EICO): a cluster-randomised controlled trial
-The Lancet Infectious Diseases, 2026; 0. [DOI:](https://doi.org/10.1016/S1473-3099(26)00169-6)
+The Lancet Infectious Diseases, 2026; 0. [DOI](https://doi.org/10.1016/S1473-3099(26)00169-6)
 3) Valia D, Karama I, Ingelbeen B, Garba Z, van Kleef E, Lompo P, Tiendrebeogo EW, Bérenger K, Kiemde F, Yougbare S, Tiendrebeogo AL, Van Puyvelde S, Prizzon A, Vandenbroucke A, Argudín MA, Kabamba BM, Jacobc J, Tinto H, van der Sande MAB, Robert A, Rodriguez-Villalobos H. Faecal colonization with extended-spectrum β-lactamase–producing Escherichia coli and Klebsiella pneumoniae in rural Burkina Faso. Clin Microbiol Infect
-. 2026 Jul;32(7):1125-1134. [DOI:](https://10.1016/j.cmi.2026.01.001).
+. 2026 Jul;32(7):1125-1134. [DOI](https://10.1016/j.cmi.2026.01.001).

@@ -26,7 +26,7 @@ Household WASH survey data collection: Oct 2022 to Feb 2023 (Baseline); Oct 2023
 
 Household stool collection: Oct 2022 to Feb 2024 (four rounds of stool collection)
 
-Following publication of the above co-primary and secondary outcomes in Lancet Infectious Diseases and Lancet Microbe, we are now in the stage of implementing modelling and sequencing of selected human and rodent isolates, to further study quantified how changes in antibiotic use and hygiene practices impact AMR transmission. 
+Following publication of the above co-primary and secondary outcomes in [*The Lancet Infectious Diseases*](https://doi.org/10.1016/S1473-3099(26)00169-6) and [*The Lancet Microbe*](https://doi.org/10.1016/j.lanmic.2026.101427), we are now in the stage of implementing modelling and sequencing of selected human and rodent isolates, to further study quantified how changes in antibiotic use and hygiene practices impact AMR transmission and the role of the environment. 
 
 # Public data
 
